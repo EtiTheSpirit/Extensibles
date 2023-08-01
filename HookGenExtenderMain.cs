@@ -37,7 +37,10 @@ namespace HookGenExtender {
 			ModuleDefMD module = ModuleDefMD.Load(dll.FullName, options);
 
 			MirrorGenerator generator = new MirrorGenerator(module);
-			
+			generator.Generate();
+
+			FileInfo dest = new FileInfo(".\\TEST.dll");
+			generator.Save(dest);
 
 			return 0;
 		}

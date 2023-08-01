@@ -1,6 +1,4 @@
-﻿#define USE_INHERITED_MIRRORS
-
-using dnlib.DotNet;
+﻿using dnlib.DotNet;
 using dnlib.DotNet.Resources;
 using HookGenExtender.Utilities;
 using System;
@@ -26,35 +24,44 @@ namespace HookGenExtender {
 	/// </summary>
 	public sealed class MirrorGenerator {
 
-		public static TypeDef WeakReferenceType {
+		public ITypeDefOrRef WeakReferenceType {
 			get {
 				if (_weakReferenceTypeCache == null) {
 					// Reference: https://github.com/0xd4d/dnlib/blob/master/Examples/Example1.cs
 					// The original code uses typeof(void) to get ahold of mscorlib.dll
-					ModuleDefMD mod = ModuleDefMD.Load(typeof(WeakReference<>).Module.FullyQualifiedName);
-					_weakReferenceTypeCache = mod.Find(typeof(WeakReference<>).FullName, true);
+					_weakReferenceTypeCache = cache.Import(typeof(WeakReference<>));
 				}
-			
+
 				return _weakReferenceTypeCache;
 			}
 		}
 
-		public static ClassOrValueTypeSig WeakReferenceTypeSig {
+		public IMethod WeakReferenceTryGetTarget {
+			get {
+				if (_weakReferenceTryGetTarget == null) {
+					_weakReferenceTryGetTarget = cache.Import(typeof(WeakReference<>).GetMethod("TryGetTarget"));
+				}
+				return _weakReferenceTryGetTarget;
+			}
+		}
+
+		public ClassOrValueTypeSig WeakReferenceTypeSig {
 			get {
 				if (_weakRefTypeSig == null) {
-					_weakRefTypeSig = (ClassOrValueTypeSig)WeakReferenceType.ToTypeSig();
+					_weakRefTypeSig = WeakReferenceType.ToTypeSig().ToClassOrValueTypeSig();
 				}
 				return _weakRefTypeSig;
 			}
 		}
 
-		private static TypeDef? _weakReferenceTypeCache = null;
-		private static ClassOrValueTypeSig? _weakRefTypeSig = null;
+		private ITypeDefOrRef? _weakReferenceTypeCache = null;
+		private IMethod? _weakReferenceTryGetTarget = null;
+		private ClassOrValueTypeSig? _weakRefTypeSig = null;
 
-
-#if USE_INHERITED_MIRRORS
+		/// <summary>
+		/// This dictionary is only used if <see cref="GeneratorSettings.mirrorTypesInherit"/> is <see langword="true"/>.
+		/// </summary>
 		private static readonly Dictionary<ITypeDefOrRef, TypeDefUser> _mirrors = new Dictionary<ITypeDefOrRef, TypeDefUser>();
-#endif
 
 		/// <summary>
 		/// The original module that is being mirrored.
@@ -72,14 +79,24 @@ namespace HookGenExtender {
 		public string NewModuleName { get; }
 
 		/// <summary>
+		/// The settings for this generator
+		/// </summary>
+		public GeneratorSettings Settings { get; }
+
+		internal readonly ImportCache cache;
+
+		/// <summary>
 		/// Create a new generator.
 		/// </summary>
 		/// <param name="original">The module that these hooks will be generated for.</param>
 		/// <param name="newModuleName">The name of the replacement module, or null to use the built in name. This should usually mimic that of the normal module.</param>
-		public MirrorGenerator(ModuleDefMD original, string? newModuleName = null) {
+		/// <param name="settings">Any settings to change how the generator operates.</param>
+		public MirrorGenerator(ModuleDefMD original, string? newModuleName = null, GeneratorSettings? settings = null) {
 			Module = original;
 			NewModuleName = newModuleName ?? (original.Name + "-MIXIN");
 			MirrorModule = new ModuleDefUser(NewModuleName);
+			Settings = settings ?? new GeneratorSettings();
+			cache = new ImportCache(MirrorModule);
 
 			// TODO:
 			// 1: Create the new patch type (done)
@@ -107,43 +124,59 @@ namespace HookGenExtender {
 				if (def.IsForwarder) continue;
 				if (def.IsInterface) continue;
 				if (def.IsPrimitive) continue;
+				if (def.IsSpecialName) continue;
+				if (def.IsRuntimeSpecialName) continue;
+				if (def.Name.StartsWith("<>")) continue;
+				if (def.Namespace.StartsWith("Microsoft.CodeAnalysis")) continue;
+				if (def.Namespace.StartsWith("System.")) continue;
 
-				
+				TypeDefUser repl = GenerateReplacementType(def, cache.Import(def));
+				MirrorModule.Types.Add(repl);
 			}
+		}
+
+		public void Save(FileInfo to) {
+			if (to.Exists) to.Delete();
+			using FileStream stream = to.Open(FileMode.CreateNew);
+			MirrorModule.Write(stream);
 		}
 
 		/// <summary>
 		/// Generates the entire type for a mirror, and registers it to the mirror module.
 		/// </summary>
 		/// <param name="from"></param>
-		private TypeDefUser GenerateReplacementType(TypeDef from) {
+		private TypeDefUser GenerateReplacementType(TypeDef original, ITypeDefOrRef from) {
 			// TODO: Generate or use the base type of the original? No base type? Object?
-			// For now I will use object.
+			// For now, the base type is the mirror.
 
-			// TO FUTURE SELF: It is a perfectly valid option to use these mirror classes as bases for eachother
-			// The only hurdle is the Original property would need to be a shadow.
-
-			TypeDef inheritFrom = Module.CorLibTypes.Object.TypeDef;
-#if USE_INHERITED_MIRRORS
-			if (from.BaseType != null && from.BaseType != inheritFrom) {
-				// Inherits from another type.
-				if (_mirrors.TryGetValue(from.BaseType, out TypeDefUser? baseMirror)) {
-					inheritFrom = baseMirror;
-				} else {
-					TypeDefUser repl = GenerateReplacementType((TypeDef)from.BaseType);
-					inheritFrom = repl;
-					_mirrors[from.BaseType] = repl;
+			ITypeDefOrRef baseType = from.GetBaseType();
+			ITypeDefOrRef inheritFrom = Module.CorLibTypes.Object.TypeDefOrRef;
+			if (Settings.mirrorTypesInherit) {
+				if (baseType != null && baseType.AssemblyQualifiedName != inheritFrom.AssemblyQualifiedName) {
+					// Inherits from another type.
+					if (_mirrors.TryGetValue(baseType, out TypeDefUser? baseMirror)) {
+						inheritFrom = baseMirror;
+					} else {
+						TypeDefUser repl = GenerateReplacementType(original, baseType);
+						inheritFrom = repl;
+						_mirrors[baseType] = repl;
+					}
 				}
 			}
-#endif
 
-			TypeDefUser replacement = new TypeDefUser($"Mixin.{from.Namespace}", from.Name, Module.CorLibTypes.Object.TypeDef);
+			string ns = from.Namespace;
+			if (ns != null && ns.Length > 0) {
+				ns = '.' + ns;
+			}
+			TypeDefUser replacement = new TypeDefUser($"Mixin{ns}", from.Name, inheritFrom);
 			replacement.Attributes = TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class;
 
-			// Add WeakReference<T> _original
-			// Add T Original { get { _original.TryGetTarget(t); return t; } }
-			BindOriginalReference(from, replacement);
-			BindPropertyMirrors(from, replacement);
+			PropertyDefUser orgRef = BindOriginalReference(from, replacement);
+			BindPropertyMirrors(original, replacement, orgRef);
+			BindFieldMirrors(original, replacement, orgRef);
+			BindMethodMirrors(original, replacement, orgRef);
+
+			return replacement;
 		}
 
 		/// <summary>
@@ -152,17 +185,21 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="originalType"></param>
 		/// <param name="to"></param>
-		private void BindOriginalReference(TypeDef originalType, TypeDefUser to) {
-			// System.Runtime.dll
+		private PropertyDefUser BindOriginalReference(ITypeDefOrRef originalType, TypeDefUser to) {
 			TypeSig originalTypeSig = originalType.ToTypeSig();
+			
 			GenericInstSig weakRefInstance = new GenericInstSig(WeakReferenceTypeSig, originalTypeSig);
+			GenericInstMethodSig weakRefTryGetTarget = new GenericInstMethodSig(originalTypeSig);
 
 			FieldDefUser weakRef = new FieldDefUser("_original", new FieldSig(weakRefInstance), FieldAttributes.Private | FieldAttributes.InitOnly);
 			PropertyDefUser strongRef = new PropertyDefUser("Original", new PropertySig(true, originalTypeSig));
-			ILGenerators.CreateOriginalReferencer(strongRef, weakRef, weakRefInstance.TryGetTypeDef());
+			MemberRefUser mbrRef = ILGenerators.CreateOriginalReferencer(this, strongRef, weakRef, weakRefInstance, weakRefTryGetTarget);
 
 			to.Fields.Add(weakRef);
 			to.Properties.Add(strongRef);
+			to.Methods.Add(strongRef.GetMethod);
+			mbrRef.Class = to;
+			return strongRef;
 		}
 
 		/// <summary>
@@ -170,18 +207,61 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="props"></param>
 		/// <param name="inUserType"></param>
-		private static void BindPropertyMirrors(TypeDef source, TypeDefUser inUserType) {
-			foreach (PropertyDef property in source.Properties) {
-				if (property.IsStatic()) continue;
-				if (property.DeclaringType != source) continue;
+		private void BindPropertyMirrors(TypeDef source, TypeDefUser inUserType, PropertyDefUser orgRef) {
+			foreach (PropertyDef orgProp in source.Properties) {
+				if (orgProp.IsStatic()) continue;
+				if (orgProp.DeclaringType != source) continue;
 
 				// Duplicate the property
-				PropertyDefUser mirror = new PropertyDefUser(property.Name, property.PropertySig, property.Attributes);
+
+				PropertyDefUser mirror = new PropertyDefUser(orgProp.Name, PropertySig.CreateInstance(cache.Import(orgProp.PropertySig.RetType)), orgProp.Attributes);
+				bool hasGetter = orgProp.GetMethod != null && !orgProp.GetMethod.IsAbstract;
+				bool hasSetter = orgProp.SetMethod != null && !orgProp.SetMethod.IsAbstract;
 				
+				if (hasGetter) {
+					ILGenerators.CreateGetterToProperty(this, mirror, orgRef, Settings);
+					inUserType.Methods.Add(mirror.GetMethod);
+				} else {
+					mirror.GetMethod = null;
+				}
+				if (hasSetter) {
+					ILGenerators.CreateSetterToProperty(this, mirror, orgRef, Settings);
+					inUserType.Methods.Add(mirror.SetMethod);
+				} else {
+					mirror.SetMethod = null;
+				}
+
+				inUserType.Properties.Add(mirror);
 			}
 		}
 
-		
+		private void BindFieldMirrors(TypeDef source, TypeDefUser inUserType, PropertyDefUser orgRef) {
+			foreach (FieldDef field in source.Fields) {
+				if (field.IsStatic) continue;
+				if (field.DeclaringType != source) continue;
+
+				MemberRef orgField = cache.Import(field);
+				PropertyDefUser mirror = new PropertyDefUser(field.Name, new PropertySig(true, cache.Import(field.FieldType)));
+
+				mirror.GetMethod = ILGenerators.CreateGetterToField(this, mirror, orgField, orgRef, Settings);
+				mirror.SetMethod = ILGenerators.CreateSetterToField(this, mirror, orgField, orgRef, Settings);
+
+				inUserType.Properties.Add(mirror);
+				inUserType.Methods.Add(mirror.GetMethod);
+				inUserType.Methods.Add(mirror.SetMethod);
+			}
+		}
+
+		private void BindMethodMirrors(TypeDef source, TypeDefUser inUserType, PropertyDefUser orgRef) {
+			foreach (MethodDef mtd in source.Methods) {
+				if (mtd.IsStatic) continue;
+				if (mtd.DeclaringType != source) continue;
+				if (mtd.IsConstructor || mtd.IsStaticConstructor || mtd.Name == "Finalize") continue;
+
+				MethodDefUser mirror = ILGenerators.GenerateMethodMirror(this, mtd, orgRef, Settings);
+				inUserType.Methods.Add(mirror);
+			}
+		}
 
 	}
 }
