@@ -5,6 +5,9 @@ using System.Reflection.Emit;
 namespace HookGenExtender {
 	public static class HookGenExtenderMain {
 		private static int Main(string[] args) {
+#if DEBUG
+			args = new string[] { @"E:\Steam Games\steamapps\common\Rain World\BepInEx\utils\PUBLIC-Assembly-CSharp.dll", "true" };
+			#else
 			if (args.Length == 0) {
 				Console.WriteLine("Please pass in a single argument of a DLL or EXE file to generate for.");
 				Console.WriteLine("Optionally follow up with a boolean (true/false) indicating whether or not this is a Unity assembly.");
@@ -12,6 +15,7 @@ namespace HookGenExtender {
 				Console.ReadLine();
 				return 0;
 			}
+			#endif
 			FileInfo dll = new FileInfo(args[0]);
 			if (!dll.Exists) {
 				Console.WriteLine($"No such file: {dll.FullName}");
@@ -32,24 +36,11 @@ namespace HookGenExtender {
 			}
 			ModuleDefMD module = ModuleDefMD.Load(dll.FullName, options);
 
-			MirrorGenerator generator = new MirrorGenerator($"{Path.GetFileNameWithoutExtension(dll.Name)}-MIXIN{dll.Extension}", module);
+			MirrorGenerator generator = new MirrorGenerator(module);
 			
 
 			return 0;
 		}
 
-		private static void CreatePropertyMirror(IEnumerable<PropertyDef> props, TypeDefUser inUserType) {
-			foreach (PropertyDef property in props) {
-				if (property.IsStatic()) continue;
-
-				// Duplicate the property
-				PropertyDefUser mirror = new PropertyDefUser(property.Name, property.PropertySig, property.Attributes);
-
-				// Now write methods to mimic it.
-				MethodBuilder mtdBuilder = new MethodBuilder()
-			}
-		}
-
-		private static bool IsStatic(this PropertyDef property) => property.GetMethod?.IsStatic ?? property.SetMethod.IsStatic;
 	}
 }
