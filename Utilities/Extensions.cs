@@ -3,11 +3,15 @@ using dnlib.DotNet.Emit;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace HookGenExtender.Utilities {
 	public static class Extensions {
+#if NET6_0_OR_GREATER
+		private static Dictionary<Type, Delegate> _defaultProviders = new Dictionary<Type, Delegate>();
+#endif
 
 		/// <summary>
 		/// Returns whether or not a property is static.
@@ -41,5 +45,42 @@ namespace HookGenExtender.Utilities {
 			return value;
 		}
 
+
+		/// <summary>
+		/// Returns <see langword="true"/> if the given <paramref name="value"/> is equal to <c><see langword="default"/>(<typeparamref name="T"/>)</c>. Respects the implementation of <see cref="IEquatable{T}"/>, where applicable.
+		/// </summary>
+		/// <typeparam name="T">The type to compare to.</typeparam>
+		/// <param name="value">The value to check.</param>
+		/// <returns><see langword="true"/> if value is equal to <c><see langword="default"/>(<typeparamref name="T"/>)</c>, <see langword="false"/> if not.</returns>
+		public static bool IsDefault<T>(this T value) => EqualityComparer<T>.Default.Equals(value, default);
+
+		/// <summary>
+		/// Returns the <see langword="default"/> value of the provided <see cref="Type"/>, for use in a context where the <see langword="default"/> operator is not available (such as outside of a generic context).
+		/// </summary>
+		/// <param name="type"></param>
+		/// <returns></returns>
+		public static object? Default(this Type type) {
+			if (type == null) throw new ArgumentNullException(nameof(type));
+			if (type.IsValueType) {
+#if NET6_0_OR_GREATER // C# 10 was introduced with .NET 6
+				/*
+				 * > In C# 10 and later, a structure type (which is a value type) may have an explicit parameterless constructor 
+				 * > that may produce a non-default value of the type. Thus, we recommend using the default operator or the default 
+				 * > literal to produce the default value of a type.
+				 * 
+				 * SRC: C# documentation, https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/default-values
+				 */
+				if (_defaultProviders.TryGetValue(type, out Delegate? @default)) {
+					return @default.DynamicInvoke();
+				}
+				@default = Expression.Lambda(Expression.Convert(Expression.Default(type), typeof(object))).Compile();
+				_defaultProviders[type] = @default;
+				return @default.DynamicInvoke();
+#else
+				return Activator.CreateInstance(type);
+#endif
+			}
+			return null;
+		}
 	}
 }

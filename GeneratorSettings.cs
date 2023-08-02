@@ -1,4 +1,5 @@
-﻿using System;
+﻿using dnlib.DotNet;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,7 +15,7 @@ namespace HookGenExtender {
 		/// <summary>
 		/// Whether or not to make mirrors virtual.
 		/// </summary>
-		public bool mirrorsAreVirtual = true;
+		public bool MirrorsAreVirtual { get; } = true;
 
 		/// <summary>
 		/// If true, mirror types will extend the mirror counterpart of whatever the template class extends.
@@ -24,7 +25,12 @@ namespace HookGenExtender {
 		/// Then the same inheritence for mirrors is true:<br/>
 		/// <c>class MirrorFoo {} class MirrorBar : MirrorFoo {}</c>.
 		/// </summary>
-		public bool mirrorTypesInherit = true;
+		public bool MirrorTypesInherit { get; } = true;
+
+		public GeneratorSettings(bool mirrorsAreVirtual = true, bool mirrorTypesInherit = true) { 
+			MirrorsAreVirtual = mirrorsAreVirtual;
+			MirrorTypesInherit = mirrorTypesInherit;
+		}
 
 	}
 }
