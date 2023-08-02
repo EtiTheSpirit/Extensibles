@@ -238,10 +238,11 @@ namespace HookGenExtender.Utilities {
 			// what should that do? It's outside the context of a hook, so orig() doesn't even exist.
 			// Should it invoke the original method, which means it will run their hook?
 			// It might be possible to have an "in use" flag to quietly skip running their method...
-			FieldDefUser isCallerInInvocation = new FieldDefUser($"<>IsCallerInInvocation<>{original.Name}", new FieldSig(mirrorGenerator.MirrorModule.CorLibTypes.Boolean), FieldAttributes.PrivateScope);
+			FieldDefUser isCallerInInvocation = new FieldDefUser($"<{original.Name}>IsCallerInInvocation", new FieldSig(mirrorGenerator.MirrorModule.CorLibTypes.Boolean), FieldAttributes.PrivateScope);
 			// Let's try that.
 
 			CilBody cil = new CilBody();
+			Local? defaultRetnValueLoc = null;
 			// To have the jumps work property I have to create some instructions early.
 			Instruction ldarg0_First = OpCodes.Ldarg_0.ToInstruction();
 			Instruction ldarg0_Second = OpCodes.Ldarg_0.ToInstruction();
@@ -254,10 +255,13 @@ namespace HookGenExtender.Utilities {
 
 			// Wait, don't return quite yet!
 			// Might need to push a return value onto the stack, if this method is returning.
-			if (mirror.ReturnType != null) {
+			if (mirror.HasReturnType) {
+				defaultRetnValueLoc = new Local(mirror.ReturnType, "retn");
 				if (mirror.ReturnType.IsValueType) {
 					// Value type: Use initobj for default()
+					cil.Instructions.Add(OpCodes.Ldloca.ToInstruction(defaultRetnValueLoc));
 					cil.Instructions.Add(OpCodes.Initobj.ToInstruction(mirror.ReturnType.ToTypeDefOrRef()));
+					cil.Instructions.Add(OpCodes.Ldloc.ToInstruction(defaultRetnValueLoc));
 				} else {
 					// Reference type: Use ldnull for default()
 					cil.Instructions.Add(OpCodes.Ldnull.ToInstruction());
@@ -276,7 +280,7 @@ namespace HookGenExtender.Utilities {
 			cil.Instructions.Add(ldarg0_First);									// Func<...> del = this...
 			cil.Instructions.Add(OpCodes.Ldfld.ToInstruction(delegateOrig));	// ...delegate_orig_(...)
 			cil.Instructions.Add(OpCodes.Dup.ToInstruction());					// Func<...> del2 = del;
-			cil.Instructions.Add(OpCodes.Brtrue_S.ToInstruction(ldarg0_Second));  // if (del == null) {
+			cil.Instructions.Add(OpCodes.Brtrue_S.ToInstruction(ldarg0_Second));// if (del == null) {
 			cil.Instructions.Add(OpCodes.Pop.ToInstruction());					// Get rid of the delegate that was left on stack 0
 			cil.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());              //		this...
 			cil.Instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());             //		push true
@@ -296,7 +300,7 @@ namespace HookGenExtender.Utilities {
 			}
 			cil.Instructions.Add(callCode.ToInstruction(mbr));                  // Call the actual real method on the real object.
 																				// This will trigger the hook. Refer to the start of this method...
-			cil.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());                                // this...
+			cil.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());              // this...
 			cil.Instructions.Add(OpCodes.Ldc_I4_0.ToInstruction());             // push false
 			cil.Instructions.Add(OpCodes.Stfld.ToInstruction(isCallerInInvocation));    // ...CALLER_IN_INVOCATION$(...) = false
 			cil.Instructions.Add(OpCodes.Ret.ToInstruction());
@@ -314,6 +318,9 @@ namespace HookGenExtender.Utilities {
 			cil.Instructions.Add(OpCodes.Ret.ToInstruction());
 #endregion
 			mirror.Body = cil;
+			if (defaultRetnValueLoc != null) {
+				cil.Variables.Add(defaultRetnValueLoc);
+			}
 
 			return (mirror, delegateOrig, isCallerInInvocation);
 		}
@@ -367,7 +374,8 @@ namespace HookGenExtender.Utilities {
 			return tryGetTargetMember;
 		}
 
-		public static (FieldDefUser, MemberRefUser) CreateStaticCWTInitializer(MirrorGenerator mirrorGenerator, GenericInstSig cwtType, TypeDefUser to, TypeSig key, TypeSig value) {
+		[Obsolete("This technique isn't very good. Implementors should have their own CWTs.")]
+		public static FieldDefUser CreateStaticCWTInitializer(MirrorGenerator mirrorGenerator, GenericInstSig cwtType, TypeDefUser to, TypeSig key, TypeSig value) {
 			ITypeDefOrRef cwtTypeRef = cwtType.ToTypeDefOrRef();
 
 			//MethodDefUser staticInitializer = new MethodDefUser(".cctor", MethodSig.CreateStatic(mirrorGenerator.MirrorModule.CorLibTypes.Void), MethodAttributes.CompilerControlled | MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName);
@@ -383,7 +391,7 @@ namespace HookGenExtender.Utilities {
 			staticInit.Instructions.Add(OpCodes.Stsfld.ToInstruction(cwtStorageFld));
 			staticInit.Instructions.Add(OpCodes.Ret.ToInstruction());
 
-			return (cwtStorageFld, cwtCtor);
+			return cwtStorageFld;
 		}
 
 		#endregion

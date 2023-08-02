@@ -213,7 +213,7 @@ namespace HookGenExtender {
 			MirrorModule.Types.Add(replacement);
 
 			PropertyDefUser orgRef = BindOriginalReference(from, replacement);
-			AppendCWT(from, replacement);
+			// AppendCWT(from, replacement);
 			BindPropertyMirrors(original, replacement, orgRef);
 			BindFieldMirrors(original, replacement, orgRef);
 			BindMethodMirrors(original, replacement, orgRef);
@@ -233,7 +233,7 @@ namespace HookGenExtender {
 			GenericInstSig weakRefInstance = new GenericInstSig(WeakReferenceTypeSig, originalTypeSig);
 			GenericInstMethodSig weakRefTryGetTarget = new GenericInstMethodSig(originalTypeSig);
 
-			FieldDefUser weakRef = new FieldDefUser("_original", new FieldSig(weakRefInstance), FieldAttributes.Private | FieldAttributes.InitOnly);
+			FieldDefUser weakRef = new FieldDefUser("<original>ExtensibleWeakReference", new FieldSig(weakRefInstance), FieldAttributes.Private | FieldAttributes.InitOnly);
 			PropertyDefUser strongRef = new PropertyDefUser("Original", new PropertySig(true, originalTypeSig));
 			MemberRefUser mbrRef = ILGenerators.CreateOriginalReferencer(this, strongRef, weakRef, weakRefInstance, weakRefTryGetTarget);
 
@@ -249,12 +249,13 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="originalType"></param>
 		/// <param name="to"></param>
+		[Obsolete("This technique isn't very good. Implementors should instead have their own CWTs.")]
 		private void AppendCWT(ITypeDefOrRef originalType, TypeDefUser to) {
 			TypeSig originalTypeSig = originalType.ToTypeSig();
 
 			TypeSig dest = to.ToTypeSig();
 			GenericInstSig cwt = new GenericInstSig(CWTTypeSig, originalTypeSig, dest);
-			(FieldDefUser bindingsFld, MemberRefUser cwtCtor) = ILGenerators.CreateStaticCWTInitializer(this, cwt, to, originalTypeSig, dest);
+			FieldDefUser bindingsFld = ILGenerators.CreateStaticCWTInitializer(this, cwt, to, originalTypeSig, dest);
 			to.Fields.Add(bindingsFld);
 
 		}
@@ -295,6 +296,8 @@ namespace HookGenExtender {
 			foreach (FieldDef field in source.Fields) {
 				if (field.IsStatic) continue;
 				if (field.DeclaringType != source) continue;
+				if (field.IsSpecialName) continue;
+				if (((string)field.Name)[0] == '<') continue;
 
 				MemberRef orgField = cache.Import(field);
 				PropertyDefUser mirror = new PropertyDefUser(field.Name, PropertySig.CreateInstance(cache.Import(field.FieldType)));
@@ -316,7 +319,7 @@ namespace HookGenExtender {
 					if (mtd.DeclaringType != source) continue;
 					if (mtd.IsConstructor || mtd.IsStaticConstructor || mtd.Name == "Finalize") continue;
 					if (mtd.IsSpecialName) continue; // properties do this.
-					if (mtd.Name.Contains("<")) continue;
+					if (((string)mtd.Name)[0] == '<') continue;
 					if (mtd.HasGenericParameters) continue;
 
 					(MethodDefUser? mirror, FieldDefUser? origDelegateRef, FieldDefUser? origMtdInUse) = ILGenerators.TryGenerateBIEOrigCall(this, mtd, orgRef, Settings);
