@@ -8,10 +8,11 @@ using System.Threading.Tasks;
 namespace HookGenExtender {
 	public class DecompExample {
 
-		private static readonly ConditionalWeakTable<object, string> test;
+		private readonly WeakReference<object> test;
 
-		static DecompExample() {
-			test = new ConditionalWeakTable<object, string>();
+		public DecompExample() {
+			test = new WeakReference<object>(null);
+			
 		}
 
 	}

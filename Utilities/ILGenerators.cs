@@ -32,7 +32,7 @@ namespace HookGenExtender.Utilities {
 			CilBody getter = new CilBody();
 			getter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());                               // this.
 			getter.Instructions.Add(OpCodes.Call.ToInstruction(originalRefProperty.GetMethod));     // Original.
-			getter.Instructions.Add(OpCodes.Call.ToInstruction(orgGetter));							// (original prop name)
+			getter.Instructions.Add(OpCodes.Call.ToInstruction(orgGetter));                         // (original prop name)
 			getter.Instructions.Add(OpCodes.Ret.ToInstruction());
 			mtd.Body = getter;
 			mtd.IsHideBySig = true;
@@ -58,7 +58,7 @@ namespace HookGenExtender.Utilities {
 			setter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());                               // this.
 			setter.Instructions.Add(OpCodes.Call.ToInstruction(originalRefProperty.GetMethod));     // Original.
 			setter.Instructions.Add(OpCodes.Ldarg_1.ToInstruction());                               // value
-			setter.Instructions.Add(OpCodes.Call.ToInstruction(orgSetter));			                // set (original prop name here)
+			setter.Instructions.Add(OpCodes.Call.ToInstruction(orgSetter));                         // set (original prop name here)
 			setter.Instructions.Add(OpCodes.Ret.ToInstruction());
 			mtd.Body = setter;
 			mtd.IsHideBySig = true;
@@ -84,7 +84,7 @@ namespace HookGenExtender.Utilities {
 			CilBody getter = new CilBody();
 			getter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());                               // this.
 			getter.Instructions.Add(OpCodes.Call.ToInstruction(originalRefProperty.GetMethod));     // Original.
-			getter.Instructions.Add(OpCodes.Ldfld.ToInstruction(field));							// (original field here)
+			getter.Instructions.Add(OpCodes.Ldfld.ToInstruction(field));                            // (original field here)
 			getter.Instructions.Add(OpCodes.Ret.ToInstruction());
 			mtd.Body = getter;
 			mtd.IsHideBySig = true;
@@ -109,7 +109,7 @@ namespace HookGenExtender.Utilities {
 			setter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());                               // this.
 			setter.Instructions.Add(OpCodes.Call.ToInstruction(originalRefProperty.GetMethod));     // Original.
 			setter.Instructions.Add(OpCodes.Ldarg_1.ToInstruction());                               // value
-			setter.Instructions.Add(OpCodes.Stfld.ToInstruction(field));							// set (original field name here)
+			setter.Instructions.Add(OpCodes.Stfld.ToInstruction(field));                            // set (original field name here)
 			setter.Instructions.Add(OpCodes.Ret.ToInstruction());
 			mtd.Body = setter;
 			mtd.IsHideBySig = true;
@@ -135,9 +135,11 @@ namespace HookGenExtender.Utilities {
 			if (settings.MirrorsAreVirtual) attrs |= MethodAttributes.Virtual;
 
 			MemberRef mbr = mirrorGenerator.cache.Import(original);
-			TypeSig[] paramTypes = original.Parameters
+			Parameter[] originalParams = original.Parameters
 				.Skip(1)
 				.Where(paramDef => !paramDef.IsReturnTypeParameter)
+				.ToArray();
+			TypeSig[] paramTypes = originalParams
 				.Select(paramDef => mirrorGenerator.cache.Import(paramDef.Type))
 				.ToArray();
 			MethodDefUser mirror = new MethodDefUser(original.Name, MethodSig.CreateInstance(mirrorGenerator.cache.Import(original.ReturnType), paramTypes));
@@ -162,6 +164,12 @@ namespace HookGenExtender.Utilities {
 			cil.Instructions.Add(callCode.ToInstruction(mbr));
 			cil.Instructions.Add(OpCodes.Ret.ToInstruction());
 			mirror.Body = cil;
+
+			// NEW BEHAVIOR
+			// This is just a courtesy to the user, but let's remember to name the parameters.
+			for (int i = 0; i < originalParams.Length; i++) {
+				mirror.Parameters[i].Name = originalParams[i].Name;
+			}
 
 			return mirror;
 		}
@@ -211,7 +219,7 @@ namespace HookGenExtender.Utilities {
 				return (null, null, null);
 			}
 			TypeRef hookClassRef = mirrorGenerator.cache.Import(hookClass);
-			
+
 			TypeRef bieOrigMethod = mirrorGenerator.cache.Import(bieOrigMethodDef);
 			TypeSig bieOrigMethodSig = mirrorGenerator.cache.Import(bieOrigMethodDef.ToTypeSig());
 			IMethodDefOrRef bieOrigInvokeRef = mirrorGenerator.cache.Import(bieOrigInvoke!);
@@ -247,7 +255,7 @@ namespace HookGenExtender.Utilities {
 			Instruction ldarg0_First = OpCodes.Ldarg_0.ToInstruction();
 			Instruction ldarg0_Second = OpCodes.Ldarg_0.ToInstruction();
 			Instruction popDelegate = OpCodes.Pop.ToInstruction();
-#region Block 0
+			#region Block 0
 			// Block 0 aborts the method if IsCallerInInvocation is true.
 			cil.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
 			cil.Instructions.Add(OpCodes.Ldfld.ToInstruction(isCallerInInvocation));
@@ -270,22 +278,22 @@ namespace HookGenExtender.Utilities {
 
 			// NOW it can return.
 			cil.Instructions.Add(OpCodes.Ret.ToInstruction());
-#endregion
-#region Block 1
+			#endregion
+			#region Block 1
 			// This block loads the orig delegate that would have been set by the hook.
 			// If it's null, it will set CALLER_IN_INVOCATION$ to true, and then call the original
 			// method on the actual original class itself. This CALLER_IN_INVOCATION$ value is used
 			// to prevent this code from running a second time when ^ inevitably fires all hooks (see block 1)
 
-			cil.Instructions.Add(ldarg0_First);									// Func<...> del = this...
-			cil.Instructions.Add(OpCodes.Ldfld.ToInstruction(delegateOrig));	// ...delegate_orig_(...)
-			cil.Instructions.Add(OpCodes.Dup.ToInstruction());					// Func<...> del2 = del;
+			cil.Instructions.Add(ldarg0_First);                                 // Func<...> del = this...
+			cil.Instructions.Add(OpCodes.Ldfld.ToInstruction(delegateOrig));    // ...delegate_orig_(...)
+			cil.Instructions.Add(OpCodes.Dup.ToInstruction());                  // Func<...> del2 = del;
 			cil.Instructions.Add(OpCodes.Brtrue_S.ToInstruction(ldarg0_Second));// if (del == null) {
-			cil.Instructions.Add(OpCodes.Pop.ToInstruction());					// Get rid of the delegate that was left on stack 0
+			cil.Instructions.Add(OpCodes.Pop.ToInstruction());                  // Get rid of the delegate that was left on stack 0
 			cil.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());              //		this...
 			cil.Instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());             //		push true
 			cil.Instructions.Add(OpCodes.Stfld.ToInstruction(isCallerInInvocation));    //		...CALLER_IN_INVOCATION$(...) = true (pop)
-																				
+
 
 			cil.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());                                  // this...
 			cil.Instructions.Add(OpCodes.Call.ToInstruction(originalRefProperty.GetMethod));        // ...Original
@@ -309,14 +317,14 @@ namespace HookGenExtender.Utilities {
 			#region Block 2
 			// Block 2 calls the original hook
 			// Reminder: delegate field thing is on the stack right now.
-			cil.Instructions.Add(ldarg0_Second);													// this.
+			cil.Instructions.Add(ldarg0_Second);                                                    // this.
 			cil.Instructions.Add(OpCodes.Call.ToInstruction(originalRefProperty.GetMethod));        // Original
 			for (int i = 0; i < paramTypes.Length; i++) {
 				cil.Instructions.Add(OptimizedLdarg(i + 1));                                        // Aaaalll the args
 			}
 			cil.Instructions.Add(OpCodes.Call.ToInstruction(bieOrigInvokeRef));
 			cil.Instructions.Add(OpCodes.Ret.ToInstruction());
-#endregion
+			#endregion
 			mirror.Body = cil;
 			if (defaultRetnValueLoc != null) {
 				cil.Variables.Add(defaultRetnValueLoc);
@@ -345,21 +353,22 @@ namespace HookGenExtender.Utilities {
 		/// <param name="originalRefProp"></param>
 		/// <param name="originalWeakRefFld"></param>
 		/// <returns></returns>
-		public static MemberRefUser CreateOriginalReferencer(MirrorGenerator mirrorGenerator, PropertyDefUser originalRefProp, FieldDefUser originalWeakRefFld, GenericInstSig weakRef, GenericInstMethodSig tryGetTarget) {
-			TypeRef weakReference = weakRef.TryGetTypeRef();
+		public static void CreateOriginalReferencer(MirrorGenerator mirrorGenerator, PropertyDefUser originalRefProp, FieldDefUser originalWeakRefFld, GenericInstSig weakRef) {
 			ModuleDef module = weakRef.Module;
-			MemberRefUser tryGetTargetMember = new MemberRefUser(module, "TryGetTarget", MethodSig.CreateInstanceGeneric(1, module.CorLibTypes.Boolean, originalRefProp.PropertySig.RetType), weakReference);
-			MethodSpecUser tryGetTargetSpec = new MethodSpecUser(tryGetTargetMember, tryGetTarget);
+			ITypeDefOrRef weakRefTypeRef = weakRef.ToTypeDefOrRef();
+
+			MethodSig tryGetTargetSig = MethodSig.CreateInstance(module.CorLibTypes.Boolean, originalRefProp.PropertySig.RetType);
+			MemberRefUser tryGetTargetMember = new MemberRefUser(module, "TryGetTarget", tryGetTargetSig, weakRefTypeRef);
 
 
 			CilBody getter = new CilBody();
-			Local local = new Local(originalRefProp.PropertySig.RetType, null, 0);
+			Local local = new Local(originalRefProp.PropertySig.RetType, "storedOriginal", 0);
 			getter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());                                           // this.
 			getter.Instructions.Add(OpCodes.Ldfld.ToInstruction(originalWeakRefFld));                           // _original
 			getter.Instructions.Add(OpCodes.Ldnull.ToInstruction());                                            // push null
-			getter.Instructions.Add(OpCodes.Stloc.ToInstruction(local));                                       // store in local
-			getter.Instructions.Add(OpCodes.Ldloca.ToInstruction(local));										// Load by reference
-			getter.Instructions.Add(OpCodes.Call.ToInstruction(tryGetTargetSpec));								// Call TryGetTarget
+			getter.Instructions.Add(OpCodes.Stloc.ToInstruction(local));                                        // store in local
+			getter.Instructions.Add(OpCodes.Ldloca.ToInstruction(local));                                       // Load by reference
+			getter.Instructions.Add(OpCodes.Call.ToInstruction(tryGetTargetMember));                            // Call TryGetTarget
 			getter.Instructions.Add(OpCodes.Pop.ToInstruction());                                               // Discard the return value.
 			getter.Instructions.Add(OpCodes.Ldloc_0.ToInstruction());                                           // Load slot 0 (which stores the ref now)
 			getter.Instructions.Add(OpCodes.Ret.ToInstruction());                                               // Return the ref.
@@ -367,20 +376,36 @@ namespace HookGenExtender.Utilities {
 
 			MethodDefUser mDef = new MethodDefUser($"get_{originalRefProp.Name}", MethodSig.CreateInstance(originalRefProp.PropertySig.RetType), MethodAttributes.Public | MethodAttributes.CompilerControlled);
 			mDef.Body = getter;
-			mDef.ReturnType = originalRefProp.PropertySig.RetType;
-			mDef.MethodSig.HasThis = true;
 
 			originalRefProp.GetMethod = mDef;
-			return tryGetTargetMember;
 		}
 
-		[Obsolete("This technique isn't very good. Implementors should have their own CWTs.")]
-		public static FieldDefUser CreateStaticCWTInitializer(MirrorGenerator mirrorGenerator, GenericInstSig cwtType, TypeDefUser to, TypeSig key, TypeSig value) {
+		public static MethodDefUser CreateConstructor(MirrorGenerator mirrorGenerator, PropertyDefUser originalRefProp, FieldDefUser originalWeakRefFld, GenericInstSig weakRef, GenericInstMethodSig constructor) {
+			ITypeDefOrRef weakRefTypeRef = weakRef.ToTypeDefOrRef();
+
+			MethodSig constructorSignature = MethodSig.CreateInstance(mirrorGenerator.Module.CorLibTypes.Void, originalRefProp.PropertySig.RetType);
+			MemberRefUser constructorMember = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", constructorSignature, weakRefTypeRef);
+			MethodSpecUser constructorSpec = new MethodSpecUser(constructorMember, constructor);
+
+			MethodDefUser ctor = new MethodDefUser(".ctor", constructorSignature, MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName);
+			CilBody ctorBody = new CilBody();
+			ctorBody.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+			ctorBody.Instructions.Add(OpCodes.Ldarg_1.ToInstruction());
+			ctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(constructorSpec));
+			ctorBody.Instructions.Add(OpCodes.Stfld.ToInstruction(originalWeakRefFld));
+			ctorBody.Instructions.Add(OpCodes.Ret.ToInstruction());
+			ctor.Body = ctorBody;
+			ctor.Parameters[1].Name = "bindToThis";
+
+			return ctor;
+		}
+
+		public static FieldDefUser CreateStaticCWTInitializer(MirrorGenerator mirrorGenerator, GenericInstSig cwtType, TypeDefUser to) {
 			ITypeDefOrRef cwtTypeRef = cwtType.ToTypeDefOrRef();
 
 			//MethodDefUser staticInitializer = new MethodDefUser(".cctor", MethodSig.CreateStatic(mirrorGenerator.MirrorModule.CorLibTypes.Void), MethodAttributes.CompilerControlled | MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName);
 			MethodDef staticInitializer = to.FindOrCreateStaticConstructor();
-			FieldDefUser cwtStorageFld = new FieldDefUser("_bindings", new FieldSig(cwtType), FieldAttributes.Private | FieldAttributes.InitOnly | FieldAttributes.Static);
+			FieldDefUser cwtStorageFld = new FieldDefUser("Extensible<bindings>", new FieldSig(cwtType), FieldAttributes.PrivateScope | FieldAttributes.InitOnly | FieldAttributes.Static);
 
 			MethodSig constructorSig = MethodSig.CreateInstanceGeneric(2, mirrorGenerator.MirrorModule.CorLibTypes.Void);
 			MemberRefUser cwtCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", constructorSig, cwtTypeRef);

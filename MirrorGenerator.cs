@@ -212,8 +212,8 @@ namespace HookGenExtender {
 			replacement.Attributes = TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class;
 			MirrorModule.Types.Add(replacement);
 
-			PropertyDefUser orgRef = BindOriginalReference(from, replacement);
-			// AppendCWT(from, replacement);
+			PropertyDefUser orgRef = BindOriginalReferenceAndCtor(from, replacement);
+			AppendCWT(from, replacement);
 			BindPropertyMirrors(original, replacement, orgRef);
 			BindFieldMirrors(original, replacement, orgRef);
 			BindMethodMirrors(original, replacement, orgRef);
@@ -227,20 +227,33 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="originalType"></param>
 		/// <param name="to"></param>
-		private PropertyDefUser BindOriginalReference(ITypeDefOrRef originalType, TypeDefUser to) {
+		private PropertyDefUser BindOriginalReferenceAndCtor(ITypeDefOrRef originalType, TypeDefUser to) {
 			TypeSig originalTypeSig = originalType.ToTypeSig();
 
 			GenericInstSig weakRefInstance = new GenericInstSig(WeakReferenceTypeSig, originalTypeSig);
-			GenericInstMethodSig weakRefTryGetTarget = new GenericInstMethodSig(originalTypeSig);
+			GenericInstMethodSig constructWeakRefSig = new GenericInstMethodSig(originalTypeSig);
 
-			FieldDefUser weakRef = new FieldDefUser("<original>ExtensibleWeakReference", new FieldSig(weakRefInstance), FieldAttributes.Private | FieldAttributes.InitOnly);
-			PropertyDefUser strongRef = new PropertyDefUser("Original", new PropertySig(true, originalTypeSig));
-			MemberRefUser mbrRef = ILGenerators.CreateOriginalReferencer(this, strongRef, weakRef, weakRefInstance, weakRefTryGetTarget);
+			FieldDefUser weakRef = new FieldDefUser("<Extensible>original", new FieldSig(weakRefInstance), FieldAttributes.Private | FieldAttributes.InitOnly);
+
+			string originalMemberName = "Original";
+			if (originalType is TypeDef def) {
+				if (def.FindProperty(originalMemberName) != null) {
+					originalMemberName += "_Extensible_";
+				}
+				for (int i = 0; i < 100 && def.FindProperty(originalMemberName) != null; i++) {
+					originalMemberName = "_" + originalMemberName;
+				}
+			}
+			PropertyDefUser strongRef = new PropertyDefUser(originalMemberName, new PropertySig(true, originalTypeSig));
+			ILGenerators.CreateOriginalReferencer(this, strongRef, weakRef, weakRefInstance);
+
+			MethodDefUser ctorDef = ILGenerators.CreateConstructor(this, strongRef, weakRef, weakRefInstance, constructWeakRefSig);
 
 			to.Fields.Add(weakRef);
 			to.Properties.Add(strongRef);
 			to.Methods.Add(strongRef.GetMethod);
-			mbrRef.Class = to;
+			to.Methods.Add(ctorDef);
+
 			return strongRef;
 		}
 
@@ -249,13 +262,13 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="originalType"></param>
 		/// <param name="to"></param>
-		[Obsolete("This technique isn't very good. Implementors should instead have their own CWTs.")]
 		private void AppendCWT(ITypeDefOrRef originalType, TypeDefUser to) {
 			TypeSig originalTypeSig = originalType.ToTypeSig();
 
 			TypeSig dest = to.ToTypeSig();
-			GenericInstSig cwt = new GenericInstSig(CWTTypeSig, originalTypeSig, dest);
-			FieldDefUser bindingsFld = ILGenerators.CreateStaticCWTInitializer(this, cwt, to, originalTypeSig, dest);
+			GenericInstSig selfReferentialCWT = new GenericInstSig(CWTTypeSig, dest, dest);
+			GenericInstSig cwt = new GenericInstSig(CWTTypeSig, originalTypeSig, selfReferentialCWT);
+			FieldDefUser bindingsFld = ILGenerators.CreateStaticCWTInitializer(this, cwt, to);
 			to.Fields.Add(bindingsFld);
 
 		}
