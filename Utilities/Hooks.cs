@@ -17,7 +17,7 @@ namespace HookGenExtender.Utilities {
 		/// <param name="hookType"></param>
 		/// <param name="originalMethod"></param>
 		/// <returns></returns>
-		public static (TypeDef?, MethodDef?) TryGetOrigDelegateForMethod(this TypeDef hookType, MethodDef originalMethod) {
+		public static (TypeDef?, MethodDef?, EventDef?) TryGetOrigDelegateForMethod(this TypeDef hookType, MethodDef originalMethod) {
 			// BIE hooks follow 3 simple rules:
 			// If the method is singular (no overloads), the name is orig_MethodName
 			// If the method has overloads, the name is orig_MethodName_Types_Types_Types (where Types are the human readable names i.e. int not Int32)
@@ -33,9 +33,11 @@ namespace HookGenExtender.Utilities {
 #endif
 
 			TypeDef? type;
+			EventDef? evt = null;
 			if (types.Count() == 1) {
 				type = types.First();
-				return (type, type.FindMethod("Invoke"));
+				evt = hookType.FindEvent(((string)type.Name)[5..]);
+				return (type, type.FindMethod("Invoke"), evt);
 			}
 
 			// Match by parameters
@@ -57,8 +59,11 @@ namespace HookGenExtender.Utilities {
 			TypeSig[] originalTypes = originalMethod.Parameters.Select(param => param.Type).ToArray();
 			type = types.FirstOrDefault(type => type.GetParametersOfDelegate().Skip(1).Select(param => param.Type).SequenceEqual(originalTypes));
 #endif
+			if (type != null) {
+				evt = hookType.FindEvent(((string)type.Name)[5..]);
+			}
 
-			return (type, type?.FindMethod("Invoke"));
+			return (type, type?.FindMethod("Invoke"), evt);
 		}
 
 		public static IEnumerable<Parameter> GetParametersOfDelegate(this TypeDef @delegate) {

@@ -82,5 +82,6 @@ namespace HookGenExtender.Utilities {
 			}
 			return null;
 		}
+
 	}
 }

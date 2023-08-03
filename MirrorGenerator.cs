@@ -49,6 +49,24 @@ namespace HookGenExtender {
 			}
 		}
 
+		public ITypeDefOrRef DictionaryType {
+			get {
+				if (_dictionaryTypeCache == null) {
+					_dictionaryTypeCache = cache.Import(typeof(Dictionary<,>));
+				}
+				return _dictionaryTypeCache;
+			}
+		}
+
+		public ITypeDefOrRef EnumerableType {
+			get {
+				if (_enumerableTypeCache == null) {
+					_enumerableTypeCache = cache.Import(typeof(Enumerable));
+				}
+				return _enumerableTypeCache;
+			}
+		}
+
 		public ClassOrValueTypeSig WeakReferenceTypeSig {
 			get {
 				if (_weakRefTypeSig == null) {
@@ -67,10 +85,32 @@ namespace HookGenExtender {
 			}
 		}
 
+		public ClassOrValueTypeSig DictionaryTypeSig {
+			get {
+				if (_dictionaryTypeSig == null) {
+					_dictionaryTypeSig = DictionaryType.ToTypeSig().ToClassOrValueTypeSig();
+				}
+				return _dictionaryTypeSig;
+			}
+		}
+
+		public ClassOrValueTypeSig EnumerableTypeSig {
+			get {
+				if (_enumerableTypeSig == null) {
+					_enumerableTypeSig = EnumerableType.ToTypeSig().ToClassOrValueTypeSig();
+				}
+				return _enumerableTypeSig;
+			}
+		}
+
 		private ITypeDefOrRef? _weakReferenceTypeCache = null;
 		private ITypeDefOrRef? _cwtTypeCache = null;
+		private ITypeDefOrRef? _dictionaryTypeCache = null;
+		private ITypeDefOrRef? _enumerableTypeCache = null;
 		private ClassOrValueTypeSig? _weakRefTypeSig = null;
 		private ClassOrValueTypeSig? _cwtTypeSig = null;
+		private ClassOrValueTypeSig? _dictionaryTypeSig = null;
+		private ClassOrValueTypeSig? _enumerableTypeSig = null;
 
 		/// <summary>
 		/// This dictionary is only used if <see cref="GeneratorSettings.MirrorTypesInherit"/> is <see langword="true"/>.
@@ -104,13 +144,17 @@ namespace HookGenExtender {
 
 		internal readonly ImportCache cache;
 
+		//internal MemberRefUser? BoundAttributeCtor { get; private set; }
+
 		/// <summary>
 		/// Create a new generator.
 		/// </summary>
 		/// <param name="original">The module that these hooks will be generated for.</param>
 		/// <param name="newModuleName">The name of the replacement module, or null to use the built in name. This should usually mimic that of the normal module.</param>
 		/// <param name="settings">Any settings to change how the generator operates.</param>
+		[Obsolete("This technique is legacy and no longer supported. Provide the BepInEx Hooks DLL as well.", true)]
 		public MirrorGenerator(ModuleDefMD original, string? newModuleName = null, GeneratorSettings? settings = null) {
+			throw new NotSupportedException("This technique is legacy and no longer supported.");
 			Module = original;
 			NewModuleName = newModuleName ?? (original.Name + "-" + NAMESPACE.ToUpper());
 			MirrorModule = new ModuleDefUser(NewModuleName);
@@ -136,8 +180,10 @@ namespace HookGenExtender {
 			BepInExHooksModule.EnableTypeDefFindCache = true;
 		}
 
+		//[MemberNotNull(nameof(BoundAttributeCtor))]
 		public void Generate() {
 			Dictionary<TypeDef, TypeDefUser> orgToRepl = new Dictionary<TypeDef, TypeDefUser>();
+			//BoundAttributeCtor = ILGenerators.CreateBoundAttributeConstructor(this);
 
 			TypeDef[] allTypes = Module.GetTypes().ToArray();
 			int current = 0;
@@ -212,11 +258,16 @@ namespace HookGenExtender {
 			replacement.Attributes = TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class;
 			MirrorModule.Types.Add(replacement);
 
-			PropertyDefUser orgRef = BindOriginalReferenceAndCtor(from, replacement);
-			AppendCWT(from, replacement);
-			BindPropertyMirrors(original, replacement, orgRef);
-			BindFieldMirrors(original, replacement, orgRef);
-			BindMethodMirrors(original, replacement, orgRef);
+			
+			(PropertyDefUser strongRef, FieldDefUser weakRef) = BindOriginalReferenceAndCtor(from, replacement);
+			(GenericVar tExtendsExtensible, TypeDefUser binderType) = CreateExtensibleBinderClass(from, replacement, weakRef);
+			// AppendCWT(from, replacement);
+			BindPropertyMirrors(original, replacement, strongRef);
+			BindFieldMirrors(original, replacement, strongRef);
+			BindMethodMirrors(original, replacement, binderType, strongRef, tExtendsExtensible);
+
+			// Now close the binder class's static constructor
+			binderType.FindOrCreateStaticConstructor().Body.Instructions.Add(dnlib.DotNet.Emit.OpCodes.Ret.ToInstruction());
 
 			return replacement;
 		}
@@ -227,7 +278,7 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="originalType"></param>
 		/// <param name="to"></param>
-		private PropertyDefUser BindOriginalReferenceAndCtor(ITypeDefOrRef originalType, TypeDefUser to) {
+		private (PropertyDefUser, FieldDefUser) BindOriginalReferenceAndCtor(ITypeDefOrRef originalType, TypeDefUser to) {
 			TypeSig originalTypeSig = originalType.ToTypeSig();
 
 			GenericInstSig weakRefInstance = new GenericInstSig(WeakReferenceTypeSig, originalTypeSig);
@@ -254,7 +305,7 @@ namespace HookGenExtender {
 			to.Methods.Add(strongRef.GetMethod);
 			to.Methods.Add(ctorDef);
 
-			return strongRef;
+			return (strongRef, weakRef);
 		}
 
 		/// <summary>
@@ -262,6 +313,7 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="originalType"></param>
 		/// <param name="to"></param>
+		[Obsolete]
 		private void AppendCWT(ITypeDefOrRef originalType, TypeDefUser to) {
 			TypeSig originalTypeSig = originalType.ToTypeSig();
 
@@ -271,6 +323,34 @@ namespace HookGenExtender {
 			FieldDefUser bindingsFld = ILGenerators.CreateStaticCWTInitializer(this, cwt, to);
 			to.Fields.Add(bindingsFld);
 
+		}
+
+
+		private (GenericVar, TypeDefUser) CreateExtensibleBinderClass(ITypeDefOrRef originalImported, TypeDefUser extensible, FieldDefUser mirrorOriginalField) {
+			TypeDefUser binder = new TypeDefUser("Binder", MirrorModule.CorLibTypes.Object.ToTypeDefOrRef());
+			binder.Attributes |= TypeAttributes.Sealed | TypeAttributes.Abstract | TypeAttributes.NestedPublic;
+			GenericParamUser genericParam = new GenericParamUser(0, GenericParamAttributes.ReferenceTypeConstraint | GenericParamAttributes.DefaultConstructorConstraint, "TExtensible");
+			genericParam.GenericParamConstraints.Add(new GenericParamConstraintUser(extensible));
+			binder.GenericParameters.Add(genericParam);
+			extensible.NestedTypes.Add(binder);
+
+			GenericVar tExtendsExtensible = new GenericVar(0, binder);
+
+			GenericInstSig instancesCWT = new GenericInstSig(CWTTypeSig, originalImported.ToTypeSig(), tExtendsExtensible);
+			FieldDefUser instancesCache = new FieldDefUser("_instances", new FieldSig(instancesCWT), FieldAttributes.PrivateScope | FieldAttributes.Static);
+			binder.Fields.Add(instancesCache);
+
+			FieldDefUser didFirstInit = new FieldDefUser("_didFirstInit", new FieldSig(MirrorModule.CorLibTypes.Boolean), FieldAttributes.PrivateScope | FieldAttributes.Static);
+			binder.Fields.Add(didFirstInit);
+
+			MethodDefUser bind = ILGenerators.GenerateBinderBindMethod(this, originalImported, extensible, tExtendsExtensible, instancesCache, didFirstInit, instancesCWT, mirrorOriginalField);
+			binder.Methods.Add(bind);
+
+			// REMEMBER: The function generator (where it ports the methods into the extensible type) is responsible for adding the four instructions
+			// required to register the equivalent binder method. This leaves the function open (it has no ret) which is added at the end of the type generator
+			// above. Do not do that here. Do not generate static constructor / event bind code here!
+			
+			return (tExtendsExtensible, binder);
 		}
 
 		/// <summary>
@@ -324,7 +404,7 @@ namespace HookGenExtender {
 			}
 		}
 
-		private void BindMethodMirrors(TypeDef source, TypeDefUser inUserType, PropertyDefUser orgRef) {
+		private void BindMethodMirrors(TypeDef source, TypeDefUser inUserType, TypeDefUser binderType, PropertyDefUser orgRef, GenericVar tExtendsExtensible) {
 			if (BepInExHooksModule != null) {
 				// BIE behavior: Use the original method delegate.
 				foreach (MethodDef mtd in source.Methods) {
@@ -335,14 +415,16 @@ namespace HookGenExtender {
 					if (((string)mtd.Name)[0] == '<') continue;
 					if (mtd.HasGenericParameters) continue;
 
-					(MethodDefUser? mirror, FieldDefUser? origDelegateRef, FieldDefUser? origMtdInUse) = ILGenerators.TryGenerateBIEOrigCall(this, mtd, orgRef, Settings);
-					if (mirror != null && origDelegateRef != null && origMtdInUse != null) {
+					(MethodDefUser? mirror, FieldDefUser? origDelegateRef, FieldDefUser? origMtdInUse, MethodDefUser? binderMirror) = ILGenerators.TryGenerateBIEOrigCall(this, mtd, orgRef, binderType, tExtendsExtensible, Settings);
+					if (mirror != null && origDelegateRef != null && origMtdInUse != null && binderMirror != null) {
 						inUserType.Methods.Add(mirror);
 						inUserType.Fields.Add(origDelegateRef);
 						inUserType.Fields.Add(origMtdInUse);
+						binderType.Methods.Add(binderMirror); // Remember to use bindertype!
 					}
 				}
 			} else {
+				throw new NotSupportedException("This technique is legacy and no longer supported.");
 				// Default behavior: Just redirect to original method.
 				foreach (MethodDef mtd in source.Methods) {
 					if (mtd.IsStatic) continue;
