@@ -37,7 +37,7 @@ namespace HookGenExtender.Utilities {
 		}
 
 		public static TValue GetOrCreate<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, Func<TKey, TValue> create) where TKey : notnull {
-			if (dict.TryGetValue(key, out TValue? value)) {
+			if (dict.TryGetValue(key, out TValue value)) {
 				return value;
 			}
 			value = create(key);
@@ -59,7 +59,7 @@ namespace HookGenExtender.Utilities {
 		/// </summary>
 		/// <param name="type"></param>
 		/// <returns></returns>
-		public static object? Default(this Type type) {
+		public static object Default(this Type type) {
 			if (type == null) throw new ArgumentNullException(nameof(type));
 			if (type.IsValueType) {
 #if NET6_0_OR_GREATER // C# 10 was introduced with .NET 6

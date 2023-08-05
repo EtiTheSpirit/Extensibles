@@ -36,7 +36,7 @@ namespace HookGenExtender.Utilities {
 			EventDef? evt = null;
 			if (types.Count() == 1) {
 				type = types.First();
-				evt = hookType.FindEvent(((string)type.Name)[5..]);
+				evt = hookType.FindEvent(type.Name.Substring(5));
 				return (type, type.FindMethod("Invoke"), evt);
 			}
 
@@ -60,7 +60,7 @@ namespace HookGenExtender.Utilities {
 			type = types.FirstOrDefault(type => type.GetParametersOfDelegate().Skip(1).Select(param => param.Type).SequenceEqual(originalTypes));
 #endif
 			if (type != null) {
-				evt = hookType.FindEvent(((string)type.Name)[5..]);
+				evt = hookType.FindEvent(type.Name.Substring(5));
 			}
 
 			return (type, type?.FindMethod("Invoke"), evt);

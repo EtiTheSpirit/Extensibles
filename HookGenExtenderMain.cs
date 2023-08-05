@@ -1,5 +1,6 @@
 ﻿using dnlib.DotNet;
 using dnlib.DotNet.Emit;
+using System.IO;
 using System.Reflection.Emit;
 
 namespace HookGenExtender {
@@ -20,7 +21,7 @@ namespace HookGenExtender {
 			MirrorGenerator generator = new MirrorGenerator(module, hooksMod);
 			generator.Generate();
 
-			FileInfo dest = new FileInfo(".\\TEST.dll");
+			FileInfo dest = new FileInfo(".\\EXTENSIBLES-Assembly-CSharp.dll");
 			generator.Save(dest);
 
 			return 0;
