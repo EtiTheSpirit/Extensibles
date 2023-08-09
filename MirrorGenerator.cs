@@ -33,13 +33,29 @@ namespace HookGenExtender {
 	/// </summary>
 	public sealed class MirrorGenerator {
 
+		/// <summary>
+		/// This is the type of private used when declaring private fields (because C# has more than one level of private internally).
+		/// </summary>
 		public const FieldAttributes PRIVATE_FIELD_TYPE = FieldAttributes.PrivateScope;
+
+		/// <summary>
+		/// This is the type of private used when declaring private methods (because C# has more than one level of private internally).
+		/// </summary>
 		public const MethodAttributes PRIVATE_METHOD_TYPE = (MethodAttributes)PRIVATE_FIELD_TYPE;
 
+		/// <summary>
+		/// This is the name of the Extensible namespace.
+		/// </summary>
 		public const string NAMESPACE = "Extensible";
 
-		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 3, 0, 4);
+		/// <summary>
+		/// The version of the current Extensibles module. This is used by the generator to determine if the existing DLL in the BepInEx folder is outdated.
+		/// </summary>
+		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 4, 0, 4);
 
+		/// <summary>
+		/// A cached lookup to <c>WeakReference&lt;&gt;</c>
+		/// </summary>
 		public ITypeDefOrRef WeakReferenceType {
 			get {
 				if (_weakReferenceTypeCache == null) {
@@ -52,6 +68,9 @@ namespace HookGenExtender {
 			}
 		}
 
+		/// <summary>
+		/// A cached lookup to <c>ConditionalWeakTable&lt;,&gt;</c>
+		/// </summary>
 		public ITypeDefOrRef CWTType {
 			get {
 				if (_cwtTypeCache == null) {
@@ -61,15 +80,9 @@ namespace HookGenExtender {
 			}
 		}
 
-		public ITypeDefOrRef EnumerableType {
-			get {
-				if (_enumerableTypeCache == null) {
-					_enumerableTypeCache = cache.Import(typeof(Enumerable));
-				}
-				return _enumerableTypeCache;
-			}
-		}
-
+		/// <summary>
+		/// A cached lookup to <c>WeakReference&lt;&gt;</c>'s signature
+		/// </summary>
 		public ClassOrValueTypeSig WeakReferenceTypeSig {
 			get {
 				if (_weakRefTypeSig == null) {
@@ -79,6 +92,9 @@ namespace HookGenExtender {
 			}
 		}
 
+		/// <summary>
+		/// A cached lookup to <c>ConditionalWeakTable&lt;,&gt;</c>'s signature
+		/// </summary>
 		public ClassOrValueTypeSig CWTTypeSig {
 			get {
 				if (_cwtTypeSig == null) {
@@ -88,21 +104,10 @@ namespace HookGenExtender {
 			}
 		}
 
-		public ClassOrValueTypeSig EnumerableTypeSig {
-			get {
-				if (_enumerableTypeSig == null) {
-					_enumerableTypeSig = EnumerableType.ToTypeSig().ToClassOrValueTypeSig();
-				}
-				return _enumerableTypeSig;
-			}
-		}
-
 		private ITypeDefOrRef _weakReferenceTypeCache = null;
 		private ITypeDefOrRef _cwtTypeCache = null;
-		private ITypeDefOrRef _enumerableTypeCache = null;
 		private ClassOrValueTypeSig _weakRefTypeSig = null;
 		private ClassOrValueTypeSig _cwtTypeSig = null;
-		private ClassOrValueTypeSig _enumerableTypeSig = null;
 
 		/// <summary>
 		/// The original module that is being mirrored.
@@ -110,7 +115,8 @@ namespace HookGenExtender {
 		public ModuleDefMD Module { get; }
 
 		/// <summary>
-		/// The -HOOKS DLL provided by BepInEx. Optional, but this can allow generating automatic hook code.
+		/// The -HOOKS DLL provided by BepInEx. This is used to figure out what to actually make into an extensible in the first place
+		/// (only BIE hooked classes are used)
 		/// </summary>
 		public ModuleDefMD BepInExHooksModule { get; }
 
@@ -120,7 +126,8 @@ namespace HookGenExtender {
 		public ModuleDefUser MirrorModule { get; }
 
 		/// <summary>
-		/// The name of the new module.
+		/// The name of the new module. This is its assembly name, rather than the name of the DLL file.
+		/// By default, and if <see langword="null"/>, this is the name of the original assembly followed by <c>-Extensible</c>
 		/// </summary>
 		public string NewModuleName { get; }
 
@@ -132,6 +139,25 @@ namespace HookGenExtender {
 		private readonly Dictionary<TypeDefUser, TypeRef> _originalRefs = new Dictionary<TypeDefUser, TypeRef>();
 		private readonly HashSet<TypeDefUser> _validMembers = new HashSet<TypeDefUser>();
 
+		/// <summary>
+		/// Set this callback to filter out which types have extensible variants generated. Return true to allow, false to delete.
+		/// </summary>
+		public Func<ITypeDefOrRef, bool> IsTypeAllowedCallback { get; set; } = _ => true;
+
+		/// <summary>
+		/// Set this callback to filter out certain fields from being proxied. Return true to allow, false to delete.
+		/// </summary>
+		public Func<IMemberRef, bool> IsFieldAllowedCallback { get; set; } = _ => true;
+		/// <summary>
+		/// Set this callback to filter out certain methods from being proxied. Return true to allow, false to delete.
+		/// </summary>
+		public Func<IMemberRef, bool> IsMethodAllowedCallback { get; set; } = _ => true;
+
+		/// <summary>
+		/// Set this callback to filter out certain properties from being proxied. Return true to allow, false to delete.
+		/// </summary>
+		public Func<IMemberRef, bool> IsPropertyAllowedCallback { get; set; } = _ => true;
+		
 		/// <summary>
 		/// Create a new generator.
 		/// </summary>
@@ -178,18 +204,20 @@ namespace HookGenExtender {
 		public TypeRef GetOriginal(TypeDefUser mirrorType) => _originalRefs[mirrorType];
 
 		public void Generate() {
-			
-			//BoundAttributeCtor = ILGenerators.CreateBoundAttributeConstructor(this);
-
 			// For the record, I know that doing this in three loops is kinda shit and wasteful.
 
+			Stopwatch sw = new Stopwatch();
 			Console.WriteLine("Pre-generating all types...");
 			Console.CursorTop--;
 			TypeDef[] allTypes = Module.GetTypes().ToArray();
 			int current = 0;
 			int real = 0;
+			int time = 0;
+			int elapsed = 0;
+			sw.Start();
 			foreach (TypeDef def in allTypes) {
 				current++;
+				if (!IsTypeAllowedCallback(def)) continue;
 				if (def.IsGlobalModuleType) continue;
 				if (def.IsDelegate) continue;
 				if (def.IsEnum) continue;
@@ -225,12 +253,17 @@ namespace HookGenExtender {
 					Console.CursorTop--;
 				}
 			}
-			Console.WriteLine($"Pre-generating all types ({current} of {allTypes.Length}, skipped {current - real}...)");
+			sw.Stop();
+			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
+			elapsed = time;
+
+			Console.WriteLine($"Pre-generating all types ({current} of {allTypes.Length}, skipped {current - real}...) took {time} seconds.");
 
 			Console.WriteLine("Binding type inheritence...");
 			Console.CursorTop--;
 			current = 0;
 
+			sw.Start();
 			foreach (KeyValuePair<TypeDef, (TypeDefUser, TypeDefUser, TypeRef)> binding in _mirrorLookup) {
 				(TypeDefUser replacement, TypeDefUser binder, TypeRef imported) = binding.Value;
 				TypeDef defKey = binding.Key;
@@ -255,11 +288,15 @@ namespace HookGenExtender {
 					Console.CursorTop--;
 				}
 			}
-			Console.WriteLine($"Binding type inheritence ({current} of {real}...)");
+			sw.Stop();
+			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
+			elapsed += time;
+			Console.WriteLine($"Binding type inheritence ({current} of {real}...) took {time} seconds.");
 			Console.WriteLine("Generating type contents...");
 			Console.CursorTop--;
 			current = 0;
 
+			sw.Start();
 			foreach (KeyValuePair<TypeDef, (TypeDefUser, TypeDefUser, TypeRef)> binding in _mirrorLookup) {
 				(TypeDefUser replacement, TypeDefUser binder, TypeRef imported) = binding.Value;
 				GenerateReplacementType(binding.Key, imported, replacement, binder);
@@ -269,8 +306,11 @@ namespace HookGenExtender {
 					Console.CursorTop--;
 				}
 			}
-			Console.WriteLine($"Generating type contents ({current} of {real}... // This step might take a while...)");
-			Console.WriteLine("Done processing!");
+			sw.Stop();
+			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
+			elapsed += time;
+			Console.WriteLine($"Generating type contents ({current} of {real}... // This step might take a while...) took {time} seconds.");
+			Console.WriteLine($"Done processing! Took {elapsed} seconds.");
 		}
 
 		public void Save(FileInfo to) {
@@ -306,7 +346,7 @@ namespace HookGenExtender {
 
 			// Now close the binder class's static constructor
 			// ILGenerators.CloseInstancesConstructor(this, replacement, binder);
-			createHooks.Body.Instructions.Add(dnlib.DotNet.Emit.OpCodes.Ret.ToInstruction());
+			createHooks.Body.Instructions.Add(OpCodes.Ret.ToInstruction());
 		}
 
 		/// <summary>
@@ -351,8 +391,9 @@ namespace HookGenExtender {
 			genericParam.GenericParamConstraints.Add(new GenericParamConstraintUser(extensible));
 			binder.GenericParameters.Add(genericParam);
 
-			MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void);
+			MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, new GenericVar(0));
 			MethodDefUser createHooks = new MethodDefUser("CreateHooks", createHooksSig, PRIVATE_METHOD_TYPE | MethodAttributes.Static);
+			createHooks.SetParameterName(0, "extensibleInstance");
 			createHooks.Body = new CilBody();
 
 			FieldDefUser hasCreatedHooks = new FieldDefUser("_hasCreatedHooks", new FieldSig(MirrorModule.CorLibTypes.Boolean), PRIVATE_FIELD_TYPE | FieldAttributes.Static);
@@ -391,6 +432,7 @@ namespace HookGenExtender {
 			foreach (PropertyDef orgProp in source.Properties) {
 				if (orgProp.IsStatic()) continue;
 				if (orgProp.DeclaringType != source) continue;
+				if (!IsPropertyAllowedCallback(orgProp)) continue;
 
 				// Duplicate the property
 
@@ -420,6 +462,7 @@ namespace HookGenExtender {
 				if (field.DeclaringType != source) continue;
 				if (field.IsSpecialName) continue;
 				if (((string)field.Name)[0] == '<') continue;
+				if (!IsFieldAllowedCallback(field)) continue;
 
 				MemberRef orgField = cache.Import(field);
 				PropertyDefUser mirror = new PropertyDefUser(field.Name, PropertySig.CreateInstance(cache.Import(field.FieldType)));
@@ -442,6 +485,7 @@ namespace HookGenExtender {
 				if (mtd.IsSpecialName) continue; // properties do this.
 				if (((string)mtd.Name)[0] == '<') continue;
 				if (mtd.HasGenericParameters) continue;
+				if (!IsMethodAllowedCallback(mtd)) continue;
 
 				(MethodDefUser mirror, FieldDefUser origDelegateRef, FieldDefUser origMtdInUse, MethodDefUser binderMirror) = ILGenerators.TryGenerateBIEOrigCallAndProxies(this, mtd, orgRef, binderType, tExtendsExtensible, importedSource, eventHookingMethod);
 				if (mirror != null && origDelegateRef != null && origMtdInUse != null && binderMirror != null) {
