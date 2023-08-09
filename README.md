@@ -51,10 +51,14 @@ public class MyPlayer : Extensible.Player {
 ```
 
 # Limitations
-
-Currently, Extensibles is **NOT** capable of the following:
-- Property injections (you still need to do these the old fashioned way).
-- Detecting when your extensible class needs to be constructed (as shown above, you need to hook `ctor` still).
+- Extensibles cannot perform property overrides at this time.
+  - This is the last entry on the to-do list for release. I want this feature.
+- Extensibles cannot detect construction of original counterparts for automatic binding. 
+  - Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
+- Extensibles cannot extend constructors or finalizers (but it *can* extend a `Dispose` method, if present).
+  - The current setup relies on a parameterless constructor existing. Any other constructors will not be used and are considered invalid. I could likely change this by calling constructors that match a signature, and by adding more `Bind` methods to the Binder for a particular class (i.e. a `Bind` method that corresponds to each constructor of the original class) but ultimately the best way to do this is up in the air.
+- Extensibles does not generate documentation.
+  - I would like it to do this, this should not be too hard. It won't document overrides but it will document the extensible type, the binder, and all extensible-managed parts.
 
 # Warnings
 

@@ -83,32 +83,6 @@ namespace HookGenExtender.Utilities {
 			return null;
 		}
 
-		public static void PutElementAt<T>(this IList<T> list, int index, T thing) {
-			if (list.Count == index) {
-				list.Add(thing);
-			} else if (list.Count > index) {
-				list[index] = thing;
-			} else {
-				while (list.Count < index) {
-					list.Add(default);
-				}
-				list.Add(thing);
-			}
-		}
-
-		public static void MutateOrAddElementAt<T>(this IList<T> list, int index, Func<T, bool, T> thingMutator) {
-			if (list.Count == index) {
-				list.Add(thingMutator(default, false));
-			} else if (list.Count > index) {
-				list[index] = thingMutator(list[index], true);
-			} else {
-				while (list.Count < index) {
-					list.Add(default);
-				}
-				list.Add(thingMutator(default, false));
-			}
-		}
-
 		/// <summary>
 		/// Sets the name of the parameter at the given index. Index 0 represents the first argument, excluding <see langword="this"/> on instance methods.
 		/// </summary>

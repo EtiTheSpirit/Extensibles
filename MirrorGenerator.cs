@@ -460,8 +460,8 @@ namespace HookGenExtender {
 			foreach (FieldDef field in source.Fields) {
 				if (field.IsStatic) continue;
 				if (field.DeclaringType != source) continue;
-				if (field.IsSpecialName) continue;
-				if (((string)field.Name)[0] == '<') continue;
+				if (field.IsSpecialName || field.IsRuntimeSpecialName) continue;
+				if (((string)field.Name)[0] == '<') continue; // Lazy
 				if (!IsFieldAllowedCallback(field)) continue;
 
 				MemberRef orgField = cache.Import(field);
