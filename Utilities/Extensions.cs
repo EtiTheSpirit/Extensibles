@@ -83,5 +83,37 @@ namespace HookGenExtender.Utilities {
 			return null;
 		}
 
+		public static void PutElementAt<T>(this IList<T> list, int index, T thing) {
+			if (list.Count == index) {
+				list.Add(thing);
+			} else if (list.Count > index) {
+				list[index] = thing;
+			} else {
+				while (list.Count < index) {
+					list.Add(default);
+				}
+				list.Add(thing);
+			}
+		}
+
+		public static void MutateOrAddElementAt<T>(this IList<T> list, int index, Func<T, bool, T> thingMutator) {
+			if (list.Count == index) {
+				list.Add(thingMutator(default, false));
+			} else if (list.Count > index) {
+				list[index] = thingMutator(list[index], true);
+			} else {
+				while (list.Count < index) {
+					list.Add(default);
+				}
+				list.Add(thingMutator(default, false));
+			}
+		}
+
+		public static void SetParameterName(this MethodDef onMethod, int index, string name) {
+			Parameter param = onMethod.Parameters[index];
+			if (!param.HasParamDef) param.CreateParamDef();
+			param.Name = name;
+		}
+
 	}
 }
