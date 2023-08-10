@@ -7,6 +7,7 @@ using dnlib.DotNet.Resources;
 using dnlib.DotNet.Writer;
 using dnlib.W32Resources;
 using HookGenExtender.Utilities;
+using HookGenExtender.Utilities.ILGeneratorParts;
 using HookGenExtender.Utilities.Representations;
 using System;
 using System.Collections.Generic;
@@ -52,7 +53,7 @@ namespace HookGenExtender {
 		/// <summary>
 		/// The version of the current Extensibles module. This is used by the generator to determine if the existing DLL in the BepInEx folder is outdated.
 		/// </summary>
-		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 4, 0, 4);
+		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 5, 0, 0);
 
 		/// <summary>
 		/// A cached lookup to <c>WeakReference&lt;&gt;</c>
@@ -227,9 +228,11 @@ namespace HookGenExtender {
 				if (def.IsPrimitive) continue;
 				if (def.IsSpecialName) continue;
 				if (def.IsRuntimeSpecialName) continue;
+				if (def.IsStatic()) continue;
 				if (def.Name.StartsWith("<")) continue; // TODO: Better version of this.
 				if (def.Namespace.StartsWith("Microsoft.CodeAnalysis")) continue;
 				if (def.Namespace.StartsWith("System.")) continue;
+				if (!BepInExExtensibles.HasBIEOnClass(this, def)) continue;
 
 				string ns = def.Namespace;
 				if (ns != null && ns.Length > 0) {
@@ -338,11 +341,12 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="from"></param>
 		private void GenerateReplacementType(TypeDef original, TypeRef from, TypeDefUser replacement, TypeDefUser binder) {
+			
 			PropertyDefUser strongRef = BindOriginalReferenceAndCtor(from, replacement);
 			(GenericVar tExtendsExtensible, TypeDefUser binderType, MethodDefUser createHooks) = CreateExtensibleBinderClass(from, replacement, binder);
 
-			BindFieldMirrors(original, replacement, strongRef);
 			BindMethodMirrors(original, from, replacement, binderType, strongRef, tExtendsExtensible, createHooks);
+			BindFieldMirrors(original, replacement, strongRef);
 			BindPropertyMirrors(original, replacement, strongRef, binderType, createHooks, tExtendsExtensible);
 
 			// Now close the binder class's static constructor
@@ -497,7 +501,7 @@ namespace HookGenExtender {
 			foreach (MethodDef mtd in source.Methods) {
 				if (mtd.IsStatic) continue;
 				if (mtd.DeclaringType != source) continue;
-				if (mtd.IsSpecialName) continue; // properties do this.
+				if (mtd.IsSpecialName || mtd.IsRuntimeSpecialName) continue; // properties do this.
 				if (mtd.HasGenericParameters) continue;
 				if (mtd.IsConstructor || mtd.IsStaticConstructor || mtd.Name == "Finalize") continue;
 				if (((string)mtd.Name)[0] == '<') continue;

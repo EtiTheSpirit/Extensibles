@@ -19,7 +19,14 @@ namespace HookGenExtender.Utilities {
 		/// <param name="property"></param>
 		/// <returns></returns>
 		public static bool IsStatic(this PropertyDef property) => property.GetMethod?.IsStatic ?? property.SetMethod.IsStatic;
-		
+
+		/// <summary>
+		/// Returns whether or not a type is static.
+		/// </summary>
+		/// <param name="type"></param>
+		/// <returns></returns>
+		public static bool IsStatic(this TypeDef type) => type.IsAbstract && type.IsSealed;
+
 		/// <summary>
 		/// Returns whether or not a property is abstract.
 		/// </summary>

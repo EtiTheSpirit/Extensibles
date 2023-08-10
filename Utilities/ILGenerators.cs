@@ -22,7 +22,8 @@ namespace HookGenExtender.Utilities {
 		/// <summary>
 		/// The virtual flag for property getters/setters. This might be 0, in which case overridable properties are not supported yet
 		/// </summary>
-		private const MethodAttributes PROPERTIES_VIRTUAL = 0;
+		[Obsolete]
+		private const MethodAttributes PROPERTIES_VIRTUAL = MethodAttributes.Virtual;
 
 		#region (Incomplete) Caches
 
@@ -128,7 +129,7 @@ namespace HookGenExtender.Utilities {
 			FieldDefUser isSetterInInvocation = null;
 
 			TypeSig propType = mirrorProperty.PropertySig.RetType;
-			if (originalPropertyToMirror.GetMethod != null) {
+			if (originalPropertyToMirror.GetMethod != null && !originalPropertyToMirror.GetMethod.IsAbstract) {
 				getDelegate = CommonMembers.CreateDelegateType(mirrorGenerator, MethodSig.CreateInstance(propType, originalDeclaringType), $"orig_get_{mirrorProperty.Name}");
 				getReceiver = new MethodDefUser(
 					originalPropertyToMirror.GetMethod.Name,
@@ -149,7 +150,7 @@ namespace HookGenExtender.Utilities {
 
 				CommonMembers.ProgramBinderCallManager(mirrorGenerator, originalDeclaringType, mirrorProperty.GetMethod, binderType, getReceiver, delegateGetterStorage, invoke, tExtendsExtensible);
 			}
-			if (originalPropertyToMirror.SetMethod != null) {
+			if (originalPropertyToMirror.SetMethod != null && !originalPropertyToMirror.SetMethod.IsAbstract) {
 				setDelegate = CommonMembers.CreateDelegateType(mirrorGenerator, MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, originalDeclaringType, propType), $"orig_set_{mirrorProperty.Name}");
 				setReceiver = new MethodDefUser(
 					originalPropertyToMirror.SetMethod.Name,
@@ -174,7 +175,7 @@ namespace HookGenExtender.Utilities {
 			}
 
 			// CreateConditionalBinderCodeBlock
-			CommonMembers.CreateConditionalBinderCodeBlock(mirrorGenerator, binderConstructionMethod.Body, binderType, getReceiver, setReceiver, mirrorProperty, originalPropertyToMirror);
+			CommonMembers.CreateConditionalBinderCodeBlock(mirrorGenerator, binderConstructionMethod.Body, binderType, getDelegate, setDelegate, getReceiver, setReceiver, mirrorProperty, originalPropertyToMirror);
 
 			return new BIEProxiedPropertyResult(
 				getDelegate,

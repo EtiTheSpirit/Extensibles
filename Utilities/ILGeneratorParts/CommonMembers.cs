@@ -240,9 +240,9 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 
 			getType ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetType", MethodSig.CreateInstance(typeTypeSig), mirrorGenerator.MirrorModule.CorLibTypes.Object.ToTypeDefOrRef());
 			getTypeFromHandle ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetTypeFromHandle", MethodSig.CreateStatic(typeTypeSig, runtimeTypeHandleSig), typeTypeRef);
-			getMethodFromHandle ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetMethodFromHandle", MethodSig.CreateStatic(typeTypeSig, runtimeTypeHandleSig), typeTypeRef);
+			getMethodFromHandle ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetMethodFromHandle", MethodSig.CreateStatic(methodInfoSig, runtimeMethodHandleSig), typeTypeRef);
 			getMethod ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetMethod", MethodSig.CreateInstance(methodInfoSig, mirrorGenerator.MirrorModule.CorLibTypes.String, bindingFlagsSig, systemReflectionBinderSig, typeArraySig, paramModifierArraySig), typeTypeRef);
-			getProperty ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetProperty", MethodSig.CreateInstance(propertyInfoSig, mirrorGenerator.MirrorModule.CorLibTypes.String, bindingFlagsSig, systemReflectionBinderSig, typeTypeSig, typeArraySig, paramModifierArraySig), typeTypeRef);
+			getProperty ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetProperty", MethodSig.CreateInstance(propertyInfoSig, mirrorGenerator.MirrorModule.CorLibTypes.String, bindingFlagsSig), typeTypeRef);
 
 		}
 
@@ -307,20 +307,25 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 		}
 
 		// For properties
-		public static void CreateConditionalBinderCodeBlock(MirrorGenerator mirrorGenerator, CilBody cctorBody, TypeDefUser binderType, MethodDefUser getterImpl, MethodDefUser setterImpl, PropertyDefUser mirror, PropertyDef originalProperty) {
-			//MethodSig delegateConstructorSig = MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, mirrorGenerator.MirrorModule.CorLibTypes.Object, mirrorGenerator.MirrorModule.CorLibTypes.IntPtr);
+		public static void CreateConditionalBinderCodeBlock(MirrorGenerator mirrorGenerator, CilBody cctorBody, TypeDefUser binderType, TypeDefUser getterDelegateType, TypeDefUser setterDelegateType, MethodDefUser getterImpl, MethodDefUser setterImpl, PropertyDefUser mirror, PropertyDef originalProperty) {
+			/*
+			MethodSig delegateConstructorSig = MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, mirrorGenerator.MirrorModule.CorLibTypes.Object, mirrorGenerator.MirrorModule.CorLibTypes.IntPtr);
 			MemberRefUser genericGetter = null;
 			MemberRefUser genericSetter = null;
+			MemberRefUser getterDelegateCtor = null;
+			MemberRefUser setterDelegateCtor = null;
 			GenericInstSig genericBinder = new GenericInstSig(binderType.ToTypeSig().ToClassOrValueTypeSig(), new GenericVar(0));
 			
 			if (getterImpl != null) {
-				//getterDelegateCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", delegateConstructorSig, getterDelegateType);
+				getterDelegateCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", delegateConstructorSig, getterDelegateType);
 				genericGetter = new MemberRefUser(mirrorGenerator.MirrorModule, getterImpl.Name, getterImpl.MethodSig, genericBinder.ToTypeDefOrRef());
 			}
 			if (setterImpl != null) {
-				//setterDelegateCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", delegateConstructorSig, setterDelegateType);
+				setterDelegateCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", delegateConstructorSig, setterDelegateType);
 				genericSetter = new MemberRefUser(mirrorGenerator.MirrorModule, setterImpl.Name, setterImpl.MethodSig, genericBinder.ToTypeDefOrRef());
 			}
+			*/
+			GenericInstSig genericBinder = new GenericInstSig(binderType.ToTypeSig().ToClassOrValueTypeSig(), new GenericVar(0));
 
 			Instruction nop = new Instruction(OpCodes.Nop);
 			PrepareCachedSystemReflectionStuffs(mirrorGenerator);
@@ -340,6 +345,7 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 				cctorBody.Instructions.Add(OpCodes.Stloc_1.ToInstruction());
 			}
 
+			cctorBody.Instructions.Add(OpCodes.Ldloc_0.ToInstruction()); // This
 			cctorBody.Instructions.Add(OpCodes.Ldstr.ToInstruction(mirror.Name)); // method name
 			cctorBody.Instructions.Add(OpCodes.Ldloc_1.ToInstruction()); // BindingFlags
 			cctorBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(getProperty));
@@ -355,18 +361,30 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			// It also has one for Delegate from, Delegate to
 			if (getterImpl != null) {
 				// Get from by referencing the member of the original property
-				cctorBody.Instructions.Add(OpCodes.Ldftn.ToInstruction(originalProperty.GetMethod.MakeMemberReference(mirrorGenerator)));
+				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.GetMethod.MakeMemberReference(mirrorGenerator)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
+				/*
+				cctorBody.Instructions.Add(OpCodes.Ldnull.ToInstruction());
 				cctorBody.Instructions.Add(OpCodes.Ldftn.ToInstruction(genericGetter));
+				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(getterDelegateCtor));
+				*/
+				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(getterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				cctorBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(hookCtor));
+				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));
+				cctorBody.Instructions.Add(OpCodes.Pop.ToInstruction());
 			}
 			if (setterImpl != null) {
-				cctorBody.Instructions.Add(OpCodes.Ldftn.ToInstruction(originalProperty.SetMethod.MakeMemberReference(mirrorGenerator)));
+				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.SetMethod.MakeMemberReference(mirrorGenerator)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
+				/*
+				cctorBody.Instructions.Add(OpCodes.Ldnull.ToInstruction());
 				cctorBody.Instructions.Add(OpCodes.Ldftn.ToInstruction(genericSetter));
+				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(setterDelegateCtor));
+				*/
+				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(setterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				cctorBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(hookCtor));
+				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));
+				cctorBody.Instructions.Add(OpCodes.Pop.ToInstruction());
 			}
 			//
 			cctorBody.Instructions.Add(nop);

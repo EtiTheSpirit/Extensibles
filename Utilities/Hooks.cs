@@ -62,15 +62,29 @@ namespace HookGenExtender.Utilities {
 		/// <summary>
 		/// Given the definition of a member in the original module, this creates a <see cref="MemberRefUser"/> to that member.
 		/// </summary>
-		/// <param name="generator"></param>
-		/// <param name="original"></param>
+		/// <param name="original">The original member.</param>
+		/// <param name="generator">The mirror generator, for importing types.</param>
+		/// <param name="in">The parent type, useful for generics.</param>
 		/// <returns></returns>
 		/// <exception cref="NotSupportedException"></exception>
-		public static MemberRefUser MakeMemberReference(this IMemberDef original, MirrorGenerator generator) {
+		public static MemberRef MakeMemberReference(this IMemberDef original, MirrorGenerator generator, ITypeDefOrRef @in = null, bool import = true) {
 			if (original.IsMethodDef) {
-				return new MemberRefUser(generator.MirrorModule, original.Name, ((MethodDef)original).MethodSig, generator.cache.Import(original.DeclaringType));
+				if (import) {
+					return generator.cache.Import((MethodDef)original);
+				}
+
+				MethodSig signature = ((MethodDef)original).MethodSig;
+				ITypeDefOrRef declaringType = @in ?? original.DeclaringType;
+				return new MemberRefUser(generator.MirrorModule, original.Name, signature, declaringType);
+
 			} else if (original.IsFieldDef) {
-				return new MemberRefUser(generator.MirrorModule, original.Name, ((FieldDef)original).FieldSig, generator.cache.Import(original.DeclaringType));
+				if (import) {
+					return generator.cache.Import((FieldDef)original);
+				}
+
+				FieldSig signature = ((FieldDef)original).FieldSig;
+				ITypeDefOrRef declaringType = @in ?? original.DeclaringType;
+				return new MemberRefUser(generator.MirrorModule, original.Name, signature, declaringType);
 			} else if (original.IsPropertyDef) {
 				throw new NotSupportedException("To reference properties, explicitly reference their get or set method instead.");
 			}

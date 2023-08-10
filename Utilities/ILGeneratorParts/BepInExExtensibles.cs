@@ -11,6 +11,18 @@ namespace HookGenExtender.Utilities {
 	public static class BepInExExtensibles {
 
 		/// <summary>
+		/// Returns whether or not the provided <paramref name="type"/> has an equivalent <c>On.</c> counterpart in BIE's Hooks module.
+		/// </summary>
+		/// <param name="mirrorGenerator"></param>
+		/// <param name="type"></param>
+		/// <returns></returns>
+		public static bool HasBIEOnClass(MirrorGenerator mirrorGenerator, TypeDef type) {
+			string fullName = type.ReflectionFullName;
+			string hookFullName = "On." + fullName;
+			return mirrorGenerator.BepInExHooksModule.Find(hookFullName, true) != null;
+		}
+
+		/// <summary>
 		/// Attempts to find a BepInEx <c>On.</c> hook for the provided method.
 		/// </summary>
 		/// <param name="mirrorGenerator">The mirror generator, for importing types.</param>
@@ -22,7 +34,7 @@ namespace HookGenExtender.Utilities {
 			// To do this, acquire the hook type and the corresponding delegate.
 			string fullName = original.DeclaringType.ReflectionFullName;
 			string hookFullName = "On." + fullName;
-			TypeDef hookClassDef = mirrorGenerator.BepInExHooksModule!.Find(hookFullName, true);
+			TypeDef hookClassDef = mirrorGenerator.BepInExHooksModule.Find(hookFullName, true);
 			if (hookClassDef == null) {
 				hook = default;
 				return false;
