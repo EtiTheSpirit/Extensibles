@@ -7,6 +7,7 @@ using dnlib.DotNet.Resources;
 using dnlib.DotNet.Writer;
 using dnlib.W32Resources;
 using HookGenExtender.Utilities;
+using HookGenExtender.Utilities.Representations;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -340,9 +341,9 @@ namespace HookGenExtender {
 			PropertyDefUser strongRef = BindOriginalReferenceAndCtor(from, replacement);
 			(GenericVar tExtendsExtensible, TypeDefUser binderType, MethodDefUser createHooks) = CreateExtensibleBinderClass(from, replacement, binder);
 
-			BindPropertyMirrors(original, replacement, strongRef);
 			BindFieldMirrors(original, replacement, strongRef);
 			BindMethodMirrors(original, from, replacement, binderType, strongRef, tExtendsExtensible, createHooks);
+			BindPropertyMirrors(original, replacement, strongRef, binderType, createHooks, tExtendsExtensible);
 
 			// Now close the binder class's static constructor
 			// ILGenerators.CloseInstancesConstructor(this, replacement, binder);
@@ -392,7 +393,7 @@ namespace HookGenExtender {
 			binder.GenericParameters.Add(genericParam);
 
 			MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, new GenericVar(0));
-			MethodDefUser createHooks = new MethodDefUser("CreateHooks", createHooksSig, PRIVATE_METHOD_TYPE | MethodAttributes.Static);
+			MethodDefUser createHooks = new MethodDefUser("<Binder>CreateHooks", createHooksSig, PRIVATE_METHOD_TYPE | MethodAttributes.Static | MethodAttributes.SpecialName);
 			createHooks.SetParameterName(0, "extensibleInstance");
 			createHooks.Body = new CilBody();
 
@@ -428,7 +429,7 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="props"></param>
 		/// <param name="inUserType"></param>
-		private void BindPropertyMirrors(TypeDef source, TypeDefUser inUserType, PropertyDefUser orgRef) {
+		private void BindPropertyMirrors(TypeDef source, TypeDefUser inUserType, PropertyDefUser orgRef, TypeDefUser binder, MethodDefUser binderInit, GenericVar tExtendsExtensible) {
 			foreach (PropertyDef orgProp in source.Properties) {
 				if (orgProp.IsStatic()) continue;
 				if (orgProp.DeclaringType != source) continue;
@@ -441,6 +442,7 @@ namespace HookGenExtender {
 				bool hasSetter = orgProp.SetMethod != null && !orgProp.SetMethod.IsAbstract;
 
 				inUserType.Properties.Add(mirror);
+				/*
 				if (hasGetter) {
 					ILGenerators.CreateGetterToProperty(this, mirror, orgProp, orgRef);
 					inUserType.Methods.Add(mirror.GetMethod);
@@ -452,6 +454,22 @@ namespace HookGenExtender {
 					inUserType.Methods.Add(mirror.SetMethod);
 				} else {
 					mirror.SetMethod = null;
+				}
+				*/
+				BIEProxiedPropertyResult result = ILGenerators.TryGenerateBIEProxiedProperty(this, mirror, orgProp, orgRef, binderInit, inUserType, binder, tExtendsExtensible);
+				if (hasGetter) {
+					inUserType.Methods.Add(result.getProxy);
+					binder.Methods.Add(result.getHook);
+					inUserType.Fields.Add(result.isGetterInInvocation);
+					inUserType.Fields.Add(result.getterOriginalCallback);
+					MirrorModule.Types.Add(result.getterDelegate);
+				}
+				if (hasSetter) {
+					inUserType.Methods.Add(result.setProxy);
+					binder.Methods.Add(result.setHook);
+					inUserType.Fields.Add(result.isSetterInInvocation);
+					inUserType.Fields.Add(result.setterOriginalCallback);
+					MirrorModule.Types.Add(result.setterDelegate);
 				}
 			}
 		}
@@ -467,9 +485,7 @@ namespace HookGenExtender {
 				MemberRef orgField = cache.Import(field);
 				PropertyDefUser mirror = new PropertyDefUser(field.Name, PropertySig.CreateInstance(cache.Import(field.FieldType)));
 
-				ILGenerators.CreateGetterToField(this, mirror, orgField, orgRef);
-				ILGenerators.CreateSetterToField(this, mirror, orgField, orgRef);
-
+				ILGenerators.CreateFieldProxy(this, mirror, orgField, orgRef);
 				inUserType.Properties.Add(mirror);
 				inUserType.Methods.Add(mirror.GetMethod);
 				inUserType.Methods.Add(mirror.SetMethod);
@@ -481,10 +497,10 @@ namespace HookGenExtender {
 			foreach (MethodDef mtd in source.Methods) {
 				if (mtd.IsStatic) continue;
 				if (mtd.DeclaringType != source) continue;
-				if (mtd.IsConstructor || mtd.IsStaticConstructor || mtd.Name == "Finalize") continue;
 				if (mtd.IsSpecialName) continue; // properties do this.
-				if (((string)mtd.Name)[0] == '<') continue;
 				if (mtd.HasGenericParameters) continue;
+				if (mtd.IsConstructor || mtd.IsStaticConstructor || mtd.Name == "Finalize") continue;
+				if (((string)mtd.Name)[0] == '<') continue;
 				if (!IsMethodAllowedCallback(mtd)) continue;
 
 				(MethodDefUser mirror, FieldDefUser origDelegateRef, FieldDefUser origMtdInUse, MethodDefUser binderMirror) = ILGenerators.TryGenerateBIEOrigCallAndProxies(this, mtd, orgRef, binderType, tExtendsExtensible, importedSource, eventHookingMethod);

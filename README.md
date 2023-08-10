@@ -34,7 +34,9 @@ public class MyPlayer : Extensible.Player {
 	// Call this from the mod's Awake()/OnEnable()
 	internal static void Initialize() {
 		On.Player.ctor += (originalMethod, @this, abstractCreature, world) => {
-			Binder<MyPlayer>.Bind(@this); // This is where the magic happens.
+			if (@this.name == MyIDs.MyCharacter) {
+				Binder<MyPlayer>.Bind(@this); // This is where the magic happens.
+			}
 			originalMethod(@this, abstractCreature, world);
 		};
 		On.Player.Destroy += (originalMethod, @this) => {
@@ -56,9 +58,11 @@ public class MyPlayer : Extensible.Player {
 - Extensibles cannot detect construction of original counterparts for automatic binding. 
   - Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
 - Extensibles cannot extend constructors or finalizers (but it *can* extend a `Dispose` method, if present).
-  - The current setup relies on a parameterless constructor existing. Any other constructors will not be used and are considered invalid. I could likely change this by calling constructors that match a signature, and by adding more `Bind` methods to the Binder for a particular class (i.e. a `Bind` method that corresponds to each constructor of the original class) but ultimately the best way to do this is up in the air.
+  - The current setup relies on a parameterless constructor existing in the developer's extensible class. Any other constructors will not be used and are considered invalid. I could likely change this by calling constructors that match a signature, and by adding more `Bind` methods to the Binder for a particular class (i.e. a `Bind` method that corresponds to each constructor of the original class) but ultimately the best way to do this is up in the air.
 - Extensibles does not generate documentation.
   - I would like it to do this, this should not be too hard. It won't document overrides but it will document the extensible type, the binder, and all extensible-managed parts.
+- Extensibles does not override methods with generic type parameters.
+  - This could probably be done later on.
 
 # Warnings
 

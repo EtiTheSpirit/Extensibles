@@ -43,6 +43,15 @@
     <Reference Include="dnlib">
       <HintPath>..\..\..\..\Desktop\1337h4x\dnlib\dnlib-3.6.0\src\bin\Debug\net35\dnlib.dll</HintPath>
     </Reference>
+    <Reference Include="MonoMod">
+      <HintPath>E:\Steam Games\steamapps\common\Rain World\BepInEx\core\MonoMod.dll</HintPath>
+    </Reference>
+    <Reference Include="MonoMod.RuntimeDetour">
+      <HintPath>E:\Steam Games\steamapps\common\Rain World\BepInEx\core\MonoMod.RuntimeDetour.dll</HintPath>
+    </Reference>
+    <Reference Include="MonoMod.Utils">
+      <HintPath>E:\Steam Games\steamapps\common\Rain World\BepInEx\core\MonoMod.Utils.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="Microsoft.CSharp" />
@@ -59,8 +68,14 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utilities\Extensions.cs" />
     <Compile Include="Utilities\Hooks.cs" />
+    <Compile Include="Utilities\ILGeneratorParts\BepInExExtensibles.cs" />
+    <Compile Include="Utilities\ILGeneratorParts\CommonMembers.cs" />
     <Compile Include="Utilities\ILGenerators.cs" />
     <Compile Include="Utilities\ImportCache.cs" />
+    <Compile Include="Utilities\Representations\BIEHookRef.cs" />
+    <Compile Include="Utilities\Representations\BIEProxiedPropertyResult.cs" />
+    <Compile Include="Utilities\Representations\CompleteHookWrapper.cs" />
+    <Compile Include="Utilities\Representations\DelegateRef.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".gitattributes" />

@@ -28,14 +28,23 @@ namespace HookGenExtender.Utilities {
 		public static bool IsAbstract(this PropertyDef property) => property.GetMethod?.IsAbstract ?? property.SetMethod.IsAbstract;
 
 		/// <summary>
-		/// Clone a Parameter List
+		/// Returns the type of a property.
 		/// </summary>
-		/// <param name="parameters"></param>
+		/// <param name="property"></param>
 		/// <returns></returns>
-		public static ParameterList Clone(this ParameterList parameters) {
-			return new ParameterList(parameters.Method, parameters.Method.DeclaringType);
-		}
+		public static TypeSig GetTypeOfProperty(this PropertyDef property) => property.PropertySig.RetType;
 
+		/// <summary>
+		/// Returns the <typeparamref name="TValue"/> associated with the provided <typeparamref name="TKey"/> in the given dictionary.
+		/// If this element does not exist, <paramref name="create"/> is called with the key to create its corresponding value, then that value
+		/// is returned.
+		/// </summary>
+		/// <typeparam name="TKey"></typeparam>
+		/// <typeparam name="TValue"></typeparam>
+		/// <param name="dict"></param>
+		/// <param name="key"></param>
+		/// <param name="create"></param>
+		/// <returns></returns>
 		public static TValue GetOrCreate<TKey, TValue>(this Dictionary<TKey, TValue> dict, TKey key, Func<TKey, TValue> create) where TKey : notnull {
 			if (dict.TryGetValue(key, out TValue value)) {
 				return value;
@@ -93,6 +102,28 @@ namespace HookGenExtender.Utilities {
 			Parameter param = onMethod.Parameters[index];
 			if (!param.HasParamDef) param.CreateParamDef();
 			param.Name = name;
+		}
+
+		/// <summary>
+		/// Selects the parameters from a method and sorts them into three output members.
+		/// </summary>
+		/// <param name="fromMethod"></param>
+		/// <param name="corLibTypes">CorLibTypes, for returning void.</param>
+		/// <param name="inputParameters">The ordered parameters that are passed into the method in C# source code (excluding this and the return parameter)</param>
+		/// <param name="returnParameter">Will never be null. The return type, or <see cref="CorLibTypes.Void"/></param>
+		/// <param name="thisParameter">The type of the <see langword="this"/> parameter, or null if the method is static.</param>
+		public static void SelectParameters(this MethodDef fromMethod, MirrorGenerator mirrorGenerator, out TypeSig[] inputParameters, out TypeSig returnParameter, out TypeSig thisParameter, bool import = true) {
+			returnParameter = fromMethod.ReturnType ?? mirrorGenerator.MirrorModule.CorLibTypes.Void;
+			thisParameter = fromMethod.HasThis ? fromMethod.DeclaringType.ToTypeSig() : null;
+			inputParameters = fromMethod.Parameters.Where(param => param.IsNormalMethodParameter).Select(param => {
+				if (import) return mirrorGenerator.cache.Import(param.Type);
+				return param.Type;
+			}).ToArray();
+
+			if (import) {
+				if (thisParameter != null) thisParameter = mirrorGenerator.cache.Import(thisParameter);
+				returnParameter = mirrorGenerator.cache.Import(returnParameter);
+			}
 		}
 
 	}
