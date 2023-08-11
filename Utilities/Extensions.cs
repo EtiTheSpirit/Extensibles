@@ -115,12 +115,15 @@ namespace HookGenExtender.Utilities {
 		/// Selects the parameters from a method and sorts them into three output members.
 		/// </summary>
 		/// <param name="fromMethod"></param>
-		/// <param name="corLibTypes">CorLibTypes, for returning void.</param>
+		/// <param name="mirrorGenerator">A mirror generator to import types. If <paramref name="import"/> is <see langword="false"/>, this can be null.</param>
 		/// <param name="inputParameters">The ordered parameters that are passed into the method in C# source code (excluding this and the return parameter)</param>
-		/// <param name="returnParameter">Will never be null. The return type, or <see cref="CorLibTypes.Void"/></param>
+		/// <param name="returnParameter">This will never be <see langword="null"/>, unless <paramref name="mirrorGenerator"/> is <see langword="null"/> in which case this might be null. The return type, or <see cref="CorLibTypes.Void"/></param>
 		/// <param name="thisParameter">The type of the <see langword="this"/> parameter, or null if the method is static.</param>
+		/// <param name="import">If true, types will be imported to ensure they can be exported in the extensibles DLL.</param>
 		public static void SelectParameters(this MethodDef fromMethod, MirrorGenerator mirrorGenerator, out TypeSig[] inputParameters, out TypeSig returnParameter, out TypeSig thisParameter, bool import = true) {
-			returnParameter = fromMethod.ReturnType ?? mirrorGenerator.MirrorModule.CorLibTypes.Void;
+			if (mirrorGenerator == null && import) throw new ArgumentException($"{nameof(import)} cannot be true if {nameof(mirrorGenerator)} is null!");
+
+			returnParameter = fromMethod.ReturnType ?? mirrorGenerator?.MirrorModule.CorLibTypes.Void;
 			thisParameter = fromMethod.HasThis ? fromMethod.DeclaringType.ToTypeSig() : null;
 			inputParameters = fromMethod.Parameters.Where(param => param.IsNormalMethodParameter).Select(param => {
 				if (import) return mirrorGenerator.cache.Import(param.Type);

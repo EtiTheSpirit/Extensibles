@@ -155,8 +155,6 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 		/// <param name="tExtendsExtensible"></param>
 		public static void ProgramBinderCallManager(MirrorGenerator mirrorGenerator, TypeSig originalClassSig, MethodDef mirror, TypeDefUser binderType, MethodDefUser receiverImpl, FieldDefUser bieOrigStorageField, IMethodDefOrRef hookEventInvoke, GenericVar tExtendsExtensible) {
 			
-			//MethodSig receiverImplSig = receiverImpl.MethodSig;
-
 			// _instances generic type
 			GenericInstSig binderAsGenericSig = new GenericInstSig(binderType.ToTypeSig().ToClassOrValueTypeSig(), new GenericVar(0));
 			ITypeDefOrRef binderAsGeneric = binderAsGenericSig.ToTypeDefOrRef();
@@ -363,11 +361,6 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 				// Get from by referencing the member of the original property
 				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.GetMethod.MakeMemberReference(mirrorGenerator)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				/*
-				cctorBody.Instructions.Add(OpCodes.Ldnull.ToInstruction());
-				cctorBody.Instructions.Add(OpCodes.Ldftn.ToInstruction(genericGetter));
-				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(getterDelegateCtor));
-				*/
 				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(getterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
 				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));
@@ -376,11 +369,6 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			if (setterImpl != null) {
 				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.SetMethod.MakeMemberReference(mirrorGenerator)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				/*
-				cctorBody.Instructions.Add(OpCodes.Ldnull.ToInstruction());
-				cctorBody.Instructions.Add(OpCodes.Ldftn.ToInstruction(genericSetter));
-				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(setterDelegateCtor));
-				*/
 				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(setterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
 				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
 				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));

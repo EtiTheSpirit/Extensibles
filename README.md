@@ -21,6 +21,8 @@ The signature behavior that makes Extensibles so powerful is its **runtime hook 
 
 If this seems a bit confusing, the takeaway is that you write your code like you would expect to write an inherited class in any other program, and it just works(tm), including with other mods.
 
+**Perhaps most importantly, this rule applies to properties too.** Extensibles allows you to declare property hooks in the same exact manner that method hooks are made (via overriding them).
+
 # Example implementation
 
 In Rain World, this is what a hypothetical setup might look like:
@@ -53,8 +55,6 @@ public class MyPlayer : Extensible.Player {
 ```
 
 # Limitations
-- Extensibles cannot perform property overrides at this time.
-  - This is the last entry on the to-do list for release. I want this feature.
 - Extensibles cannot detect construction of original counterparts for automatic binding. 
   - Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
 - Extensibles cannot extend constructors or finalizers (but it *can* extend a `Dispose` method, if present).

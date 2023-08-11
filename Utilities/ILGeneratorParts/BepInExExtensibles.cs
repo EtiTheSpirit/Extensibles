@@ -16,7 +16,7 @@ namespace HookGenExtender.Utilities {
 		/// <param name="mirrorGenerator"></param>
 		/// <param name="type"></param>
 		/// <returns></returns>
-		public static bool HasBIEOnClass(MirrorGenerator mirrorGenerator, TypeDef type) {
+		public static bool HasBIEOnClass(this TypeDef type, MirrorGenerator mirrorGenerator) {
 			string fullName = type.ReflectionFullName;
 			string hookFullName = "On." + fullName;
 			return mirrorGenerator.BepInExHooksModule.Find(hookFullName, true) != null;
