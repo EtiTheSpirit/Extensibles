@@ -33,11 +33,14 @@ public class MyPlayer : Extensible.Player {
 
 	private bool _gotPermissionToDie = false;
 
-	MyPlayer(Player original, AbstractCreature creature, World world) : base(original, creature, world) {
+	MyPlayer(Player original, AbstractCreature creature, World world) : base(original) {
 		// This constructor will be called by the binder (see below).
 		// Note that this constructor *MUST* be private. You can do this by having no access modifier (as done here) or explicitly putting private, up to you.
 		// If the constructor is not private, the binder will raise an exception reminding you to do so (this is to relay the fact that you should not be
 		// calling your ctors manually!)
+
+		// Also note that the base call only accepts original - the base constructor doesn't actually do any logic from the original class, it just ensures that the
+		// Original property (which all mirrors use) is set *before* your constructor executes.
 
 		// You MUST declare a constructor like this to use its corresponding bind method! If this constructor was missing, and Bind(player, abstractCreature, world)
 		// got called, the Binder would raise an exception because this constructor was missing.
