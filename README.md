@@ -33,7 +33,7 @@ public class MyPlayer : Extensible.Player {
 
 	private bool _gotPermissionToDie = false;
 
-	MyPlayer(Player original, AbstractCreature creature, World world) {
+	MyPlayer(Player original, AbstractCreature creature, World world) : base(original, creature, world) {
 		// This constructor will be called by the binder (see below).
 		// Note that this constructor *MUST* be private. You can do this by having no access modifier (as done here) or explicitly putting private, up to you.
 		// If the constructor is not private, the binder will raise an exception reminding you to do so (this is to relay the fact that you should not be
