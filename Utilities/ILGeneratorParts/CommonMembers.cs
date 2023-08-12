@@ -1,34 +1,46 @@
 ﻿using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 using HookGenExtender.Utilities.Representations;
+using HookGenExtender.Utilities.Shared;
 using MonoMod.RuntimeDetour;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using BindingFlags = System.Reflection.BindingFlags;
 
 namespace HookGenExtender.Utilities.ILGeneratorParts {
 	public static class CommonMembers {
 
 
-		private static TypeSig typeTypeSig = null;
-		private static TypeSig runtimeTypeHandleSig = null;
-		private static TypeSig runtimeMethodHandleSig = null;
-		private static ITypeDefOrRef typeTypeRef = null;
-		private static TypeSig bindingFlagsSig = null;
-		private static TypeSig methodInfoSig = null;
-		private static TypeSig propertyInfoSig = null;
-		private static TypeSig systemReflectionBinderSig = null;
-		private static TypeSig typeArraySig = null;
-		private static TypeSig paramModifierArraySig = null;
-		private static TypeSig methodBaseSig = null;
-		private static TypeSig delegateSig = null;
-		private static MemberRefUser getType = null;
-		private static MemberRefUser getTypeFromHandle = null;
-		private static MemberRefUser getMethodFromHandle = null;
-		private static MemberRefUser getMethod = null;
-		private static MemberRefUser getProperty = null;
+		internal static TypeSig typeTypeSig = null;
+		internal static TypeSig runtimeTypeHandleSig = null;
+		internal static TypeSig runtimeMethodHandleSig = null;
+		internal static ITypeDefOrRef typeTypeRef = null;
+		internal static ITypeDefOrRef methodBaseRef = null;
+		internal static TypeSig bindingFlagsSig = null;
+		internal static TypeSig methodAttributesSig = null;
+		internal static TypeSig methodInfoSig = null;
+		internal static TypeSig propertyInfoSig = null;
+		internal static TypeSig constructorInfoSig = null;
+		internal static TypeSig constructorInfoArraySig = null;
+		internal static TypeSig systemReflectionBinderSig = null;
+		internal static TypeSig typeArraySig = null;
+		internal static TypeSig paramModifierArraySig = null;
+		internal static TypeSig methodBaseSig = null;
+		internal static TypeSig delegateSig = null;
+		internal static TypeSig objectArraySig = null;
+		internal static MemberRefUser getType = null;
+		internal static MemberRefUser typeEquality = null;
+		internal static MemberRefUser getTypeFromHandle = null;
+		internal static MemberRefUser getMethodFromHandle = null;
+		internal static MemberRefUser getMethod = null;
+		internal static MemberRefUser getProperty = null;
+		internal static MemberRefUser getConstructor = null;
+		internal static MemberRefUser getConstructors = null;
+		internal static MemberRefUser ctorGetAttributes = null;
+		internal static MemberRefUser ctorInfoInvoke = null;
 
 		/// <summary>
 		/// Generates a member named <c>&lt;originalName&gt;IsCallerInInvocation</c>.
@@ -37,6 +49,7 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 		/// <param name="originalName">The name of the original method.</param>
 		/// <returns></returns>
 		public static FieldDefUser GenerateIsCallerInInvocation(MirrorGenerator mirrorGenerator, string originalName) {
+			// TO FUTURE XAN/MAINTAINERS: There are more instances of this string as seen below around the program. Remember to update them all if you change it.
 			FieldDefUser isCallerInInvocation = new FieldDefUser($"<{originalName}>IsCallerInInvocation", new FieldSig(mirrorGenerator.MirrorModule.CorLibTypes.Boolean), MirrorGenerator.PRIVATE_FIELD_TYPE);
 			isCallerInInvocation.IsSpecialName = true;
 			isCallerInInvocation.IsRuntimeSpecialName = true;
@@ -50,6 +63,7 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 		/// <param name="delegateTypeSig">The type signature of the delegate.</param>
 		/// <returns></returns>
 		public static FieldDefUser GenerateDelegateHolder(string originalName, TypeSig delegateTypeSig) {
+			// TO FUTURE XAN/MAINTAINERS: There are more instances of this string as seen below around the program. Remember to update them all if you change it.
 			FieldDefUser delegateHolder = new FieldDefUser($"<orig_{originalName}>ExtensibleCallback", new FieldSig(delegateTypeSig), MirrorGenerator.PRIVATE_FIELD_TYPE);
 			delegateHolder.IsSpecialName = true;
 			delegateHolder.IsRuntimeSpecialName = true;
@@ -68,7 +82,7 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 		/// <param name="hookEventInvoke"></param>
 		/// <param name="originalRefProperty"></param>
 		/// <returns></returns>
-		public static CilBody GenerateProxyMethodBody(MirrorGenerator mirrorGenerator, MethodDef original, TypeSig[] paramTypes, MemberRef originalRef, FieldDefUser delegateOriginalHolder, FieldDefUser isCallerInInvocation, IMethodDefOrRef hookEventInvoke, PropertyDefUser originalRefProperty) {
+		public static CilBody GenerateProxyMethodBody(MirrorGenerator mirrorGenerator, MethodDef original, TypeSig[] paramTypes, MemberRef originalRef, IField delegateOriginalHolder, IField isCallerInInvocation, IMethodDefOrRef hookEventInvoke, PropertyDefUser originalRefProperty) {
 			CilBody cil = new CilBody();
 
 			// TO FUTURE XAN / MAINTAINERS:
@@ -153,7 +167,7 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 		/// <param name="bieOrigStorageField"></param>
 		/// <param name="hookEventInvoke"></param>
 		/// <param name="tExtendsExtensible"></param>
-		public static void ProgramBinderCallManager(MirrorGenerator mirrorGenerator, TypeSig originalClassSig, MethodDef mirror, TypeDefUser binderType, MethodDefUser receiverImpl, FieldDefUser bieOrigStorageField, IMethodDefOrRef hookEventInvoke, GenericVar tExtendsExtensible) {
+		public static void ProgramBinderCallManager(MirrorGenerator mirrorGenerator, TypeSig originalClassSig, MethodDef mirror, TypeDefUser binderType, MethodDefUser receiverImpl, IField bieOrigStorageField, IMethodDefOrRef hookEventInvoke, GenericVar tExtendsExtensible) {
 			
 			// _instances generic type
 			GenericInstSig binderAsGenericSig = new GenericInstSig(binderType.ToTypeSig().ToClassOrValueTypeSig(), new GenericVar(0));
@@ -195,6 +209,7 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			}
 
 			body.Instructions.Add(OpCodes.Callvirt.ToInstruction(mirror)); // Call. Consumes first dup.
+			
 			if (receiverImpl.HasReturnType) {
 				// WAIT! If this is a returning method, the method pushed something onto the stack. Store it.
 				body.Instructions.Add(OpCodes.Stloc_1.ToInstruction());
@@ -222,12 +237,18 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			receiverImpl.Body = body;
 		}
 
-		private static void PrepareCachedSystemReflectionStuffs(MirrorGenerator mirrorGenerator) {
+		/// <summary>
+		/// This caches reflection-related fields.
+		/// </summary>
+		/// <param name="mirrorGenerator"></param>
+		internal static void PrepareCachedSystemReflectionStuffs(MirrorGenerator mirrorGenerator) {
 			typeTypeSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(Type));
 			typeTypeRef ??= mirrorGenerator.cache.Import(typeof(Type));
+			methodBaseRef ??= mirrorGenerator.cache.Import(typeof(System.Reflection.MethodBase));
 			runtimeTypeHandleSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(RuntimeTypeHandle));
 			runtimeMethodHandleSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(RuntimeMethodHandle));
-			bindingFlagsSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.BindingFlags));
+			bindingFlagsSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(BindingFlags));
+			methodAttributesSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.MethodAttributes));
 			methodInfoSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.MethodInfo));
 			propertyInfoSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.PropertyInfo));
 			systemReflectionBinderSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.Binder));
@@ -235,13 +256,86 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			paramModifierArraySig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.ParameterModifier[]));
 			methodBaseSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.MethodBase));
 			delegateSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(Delegate));
+			constructorInfoSig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.ConstructorInfo));
+			constructorInfoArraySig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.ConstructorInfo[]));
+			objectArraySig ??= mirrorGenerator.cache.ImportAsTypeSig(typeof(object[]));
 
 			getType ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetType", MethodSig.CreateInstance(typeTypeSig), mirrorGenerator.MirrorModule.CorLibTypes.Object.ToTypeDefOrRef());
 			getTypeFromHandle ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetTypeFromHandle", MethodSig.CreateStatic(typeTypeSig, runtimeTypeHandleSig), typeTypeRef);
-			getMethodFromHandle ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetMethodFromHandle", MethodSig.CreateStatic(methodInfoSig, runtimeMethodHandleSig), typeTypeRef);
+			getMethodFromHandle ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetMethodFromHandle", MethodSig.CreateStatic(methodBaseSig, runtimeMethodHandleSig), methodBaseRef);
 			getMethod ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetMethod", MethodSig.CreateInstance(methodInfoSig, mirrorGenerator.MirrorModule.CorLibTypes.String, bindingFlagsSig, systemReflectionBinderSig, typeArraySig, paramModifierArraySig), typeTypeRef);
 			getProperty ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetProperty", MethodSig.CreateInstance(propertyInfoSig, mirrorGenerator.MirrorModule.CorLibTypes.String, bindingFlagsSig), typeTypeRef);
+			getConstructor ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetConstructor", MethodSig.CreateInstance(constructorInfoSig, bindingFlagsSig, systemReflectionBinderSig, typeArraySig, paramModifierArraySig), typeTypeRef);
+			getConstructors ??= new MemberRefUser(mirrorGenerator.MirrorModule, "GetConstructors", MethodSig.CreateInstance(constructorInfoArraySig, bindingFlagsSig), typeTypeRef);
+			ctorGetAttributes ??= new MemberRefUser(mirrorGenerator.MirrorModule, "get_Attributes", MethodSig.CreateInstance(methodAttributesSig), constructorInfoSig.ToTypeDefOrRef());
+			ctorInfoInvoke ??= new MemberRefUser(mirrorGenerator.MirrorModule, "Invoke", MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Object, objectArraySig), constructorInfoSig.ToTypeDefOrRef());
+			typeEquality ??= new MemberRefUser(mirrorGenerator.MirrorModule, "op_Equality", MethodSig.CreateStatic(mirrorGenerator.MirrorModule.CorLibTypes.Boolean, typeTypeSig, typeTypeSig), typeTypeRef);
+		}
 
+		public static void PrependConstructorValidator(MirrorGenerator mirrorGenerator, CilBody createHooksBody) {
+			const int constructorSearch = (int)(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.DeclaredOnly);
+			const int hookMethodSearch = (int)(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.Instance);
+
+			// This is the top of the method. Store some stuff.
+			// These locals are used by the rest of the method body.
+			Local extensibleType = new Local(typeTypeSig, "type");
+			Local bindingFlags = new Local(bindingFlagsSig, "flags");
+			Local constructors = new Local(constructorInfoArraySig, "constructors");
+			Local index = new Local(mirrorGenerator.MirrorModule.CorLibTypes.Int32, "index");
+			createHooksBody.Variables.Add(extensibleType);
+			createHooksBody.Variables.Add(bindingFlags);
+			createHooksBody.Variables.Add(constructors);
+			createHooksBody.Variables.Add(index);
+																						// STACK OFFSET:
+			createHooksBody.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());			// -1
+			createHooksBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(getType));	// -1
+			createHooksBody.Instructions.Add(OpCodes.Stloc_0.ToInstruction());			// -0
+			createHooksBody.Instructions.Add(Hooks.OptimizedLdc_I4(hookMethodSearch));	// -1
+			createHooksBody.Instructions.Add(OpCodes.Stloc_1.ToInstruction());			// -0
+
+			// Now the ctor validator.
+			// Get all constructors.
+			Instruction nop = new Instruction(OpCodes.Nop);
+			createHooksBody.Instructions.Add(OpCodes.Ldloc_0.ToInstruction());					// -1
+			createHooksBody.Instructions.Add(Hooks.OptimizedLdc_I4(constructorSearch));			// -2
+			createHooksBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(getConstructors));	// -1
+			createHooksBody.Instructions.Add(OpCodes.Stloc_2.ToInstruction());					// -0
+			createHooksBody.Instructions.Add(OpCodes.Ldloc_2.ToInstruction());					// -1
+			createHooksBody.Instructions.Add(OpCodes.Ldlen.ToInstruction());                    // -1
+			createHooksBody.Instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());                 // -2
+			createHooksBody.Instructions.Add(OpCodes.Sub.ToInstruction());						// -1
+			createHooksBody.Instructions.Add(OpCodes.Stloc_S.ToInstruction(index));				// -0
+
+			Instruction load0 = new Instruction(OpCodes.Ldc_I4_0);
+			createHooksBody.Instructions.Add(load0);                                            // -1
+			createHooksBody.Instructions.Add(OpCodes.Ldloc_S.ToInstruction(index));             // -2
+			createHooksBody.Instructions.Add(OpCodes.Bgt_S.ToInstruction(nop));					// -0
+			////
+			// Now a for loop. Unfortunately, I can *not* populate the constructor cache here, as the order is not guaranteed to be the same.
+			// This code assumes there is at least one constructor, hence why it is written as so.
+			createHooksBody.Instructions.Add(OpCodes.Ldloc_2.ToInstruction());										// -1
+			createHooksBody.Instructions.Add(OpCodes.Ldloc_S.ToInstruction(index));									// -2
+			createHooksBody.Instructions.Add(OpCodes.Ldelem.ToInstruction(constructorInfoSig.ToTypeDefOrRef()));	// -1
+			createHooksBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(ctorGetAttributes));					// -1
+			createHooksBody.Instructions.Add(Hooks.OptimizedLdc_I4((int)System.Reflection.MethodAttributes.Private)); // -2
+			createHooksBody.Instructions.Add(OpCodes.And.ToInstruction());											// -1
+			createHooksBody.Instructions.Add(OpCodes.Ldc_I4_0.ToInstruction());										// -2
+			createHooksBody.Instructions.Add(OpCodes.Ceq.ToInstruction()); // If equal to 0, then it does not have private.	// -0
+			Instruction loadIndex = OpCodes.Ldloc_S.ToInstruction(index);
+			createHooksBody.Instructions.Add(OpCodes.Brfalse_S.ToInstruction(loadIndex)); // So jump over the exception if it is private.
+			////
+			createHooksBody.Instructions.Add(OpCodes.Ldstr.ToInstruction($"A constructor for your extensible type was not private. All constructors MUST be private to help enforce standards (you should never manually instantiate your extensible type)."));	// +1
+			createHooksBody.Instructions.Add(OpCodes.Newobj.ToInstruction(mirrorGenerator.CommonSignatures.General.InvalidOperationExceptionCtor));
+			createHooksBody.Instructions.Add(OpCodes.Throw.ToInstruction());
+			////
+			// At this point the constructor is definitely valid. We can continue to the next iteration.
+			createHooksBody.Instructions.Add(loadIndex);							// -1
+			createHooksBody.Instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());		// -2
+			createHooksBody.Instructions.Add(OpCodes.Sub.ToInstruction());			// -1
+			createHooksBody.Instructions.Add(OpCodes.Stloc_S.ToInstruction(index));	// -0
+			createHooksBody.Instructions.Add(OpCodes.Br_S.ToInstruction(load0));	// -0
+			////
+			createHooksBody.Instructions.Add(nop);
 		}
 
 		// For methods
@@ -255,20 +349,6 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			// NEW: Only hook the ones we actually use.
 			Instruction nop = new Instruction(OpCodes.Nop);
 			PrepareCachedSystemReflectionStuffs(mirrorGenerator);
-
-			if (cctorBody.Instructions.Count == 0) {
-				// This is the top of the method. Store some stuff.
-				Local extensibleType = new Local(typeTypeSig, "type");
-				Local bindingFlags = new Local(bindingFlagsSig, "flags");
-				cctorBody.Variables.Add(extensibleType);
-				cctorBody.Variables.Add(bindingFlags);
-
-				cctorBody.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
-				cctorBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(getType));
-				cctorBody.Instructions.Add(OpCodes.Stloc_0.ToInstruction());
-				cctorBody.Instructions.Add(Hooks.OptimizedLdc_I4((int)(System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)));
-				cctorBody.Instructions.Add(OpCodes.Stloc_1.ToInstruction());
-			}
 
 			TypeSig[] visibleParams = mirror.GetParams().Where(param => param != mirror.ReturnType).ToArray();
 
@@ -305,7 +385,7 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 		}
 
 		// For properties
-		public static void CreateConditionalBinderCodeBlock(MirrorGenerator mirrorGenerator, CilBody cctorBody, TypeDefUser binderType, TypeDefUser getterDelegateType, TypeDefUser setterDelegateType, MethodDefUser getterImpl, MethodDefUser setterImpl, PropertyDefUser mirror, PropertyDef originalProperty) {
+		public static void CreateConditionalBinderCodeBlock(MirrorGenerator mirrorGenerator, CilBody createHooksBody, TypeDefUser binderType, TypeDefUser getterDelegateType, TypeDefUser setterDelegateType, MethodDefUser getterImpl, MethodDefUser setterImpl, PropertyDefUser mirror, PropertyDef originalProperty) {
 			/*
 			MethodSig delegateConstructorSig = MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, mirrorGenerator.MirrorModule.CorLibTypes.Object, mirrorGenerator.MirrorModule.CorLibTypes.IntPtr);
 			MemberRefUser genericGetter = null;
@@ -327,29 +407,14 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 
 			Instruction nop = new Instruction(OpCodes.Nop);
 			PrepareCachedSystemReflectionStuffs(mirrorGenerator);
-
-			if (cctorBody.Instructions.Count == 0) {
-				// This is the top of the method. Store some stuff.
-				// Note that this shares the method with the method hook system so stuff for just the method hook system is relevant.
-				Local extensibleType = new Local(typeTypeSig, "type");
-				Local bindingFlags = new Local(bindingFlagsSig, "flags");
-				cctorBody.Variables.Add(extensibleType);
-				cctorBody.Variables.Add(bindingFlags);
-
-				cctorBody.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
-				cctorBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(getType));
-				cctorBody.Instructions.Add(OpCodes.Stloc_0.ToInstruction());
-				cctorBody.Instructions.Add(Hooks.OptimizedLdc_I4((int)(System.Reflection.BindingFlags.DeclaredOnly | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)));
-				cctorBody.Instructions.Add(OpCodes.Stloc_1.ToInstruction());
-			}
-
-			cctorBody.Instructions.Add(OpCodes.Ldloc_0.ToInstruction()); // This
-			cctorBody.Instructions.Add(OpCodes.Ldstr.ToInstruction(mirror.Name)); // method name
-			cctorBody.Instructions.Add(OpCodes.Ldloc_1.ToInstruction()); // BindingFlags
-			cctorBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(getProperty));
-			cctorBody.Instructions.Add(OpCodes.Ldnull.ToInstruction());
-			cctorBody.Instructions.Add(OpCodes.Ceq.ToInstruction());
-			cctorBody.Instructions.Add(OpCodes.Brtrue_S.ToInstruction(nop));
+			
+			createHooksBody.Instructions.Add(OpCodes.Ldloc_0.ToInstruction()); // This
+			createHooksBody.Instructions.Add(OpCodes.Ldstr.ToInstruction(mirror.Name)); // method name
+			createHooksBody.Instructions.Add(OpCodes.Ldloc_1.ToInstruction()); // BindingFlags
+			createHooksBody.Instructions.Add(OpCodes.Callvirt.ToInstruction(getProperty));
+			createHooksBody.Instructions.Add(OpCodes.Ldnull.ToInstruction());
+			createHooksBody.Instructions.Add(OpCodes.Ceq.ToInstruction());
+			createHooksBody.Instructions.Add(OpCodes.Brtrue_S.ToInstruction(nop));
 
 			ITypeDefOrRef hookType = mirrorGenerator.cache.Import(typeof(Hook));
 			MemberRefUser hookCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, methodBaseSig, delegateSig), hookType);
@@ -359,24 +424,25 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			// It also has one for Delegate from, Delegate to
 			if (getterImpl != null) {
 				// Get from by referencing the member of the original property
-				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.GetMethod.MakeMemberReference(mirrorGenerator)));
-				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(getterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
-				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));
-				cctorBody.Instructions.Add(OpCodes.Pop.ToInstruction());
+				createHooksBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.GetMethod.MakeMemberReference(mirrorGenerator)));
+				createHooksBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
+				createHooksBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(getterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
+				createHooksBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
+				createHooksBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));
+				createHooksBody.Instructions.Add(OpCodes.Pop.ToInstruction());
 			}
 			if (setterImpl != null) {
-				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.SetMethod.MakeMemberReference(mirrorGenerator)));
-				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				cctorBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(setterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
-				cctorBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
-				cctorBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));
-				cctorBody.Instructions.Add(OpCodes.Pop.ToInstruction());
+				createHooksBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalProperty.SetMethod.MakeMemberReference(mirrorGenerator)));
+				createHooksBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
+				createHooksBody.Instructions.Add(OpCodes.Ldtoken.ToInstruction(setterImpl.MakeMemberReference(mirrorGenerator, genericBinder.ToTypeDefOrRef(), false)));
+				createHooksBody.Instructions.Add(OpCodes.Call.ToInstruction(getMethodFromHandle));
+				createHooksBody.Instructions.Add(OpCodes.Newobj.ToInstruction(hookCtor));
+				createHooksBody.Instructions.Add(OpCodes.Pop.ToInstruction());
 			}
 			//
-			cctorBody.Instructions.Add(nop);
+			createHooksBody.Instructions.Add(nop);
 		}
+		
 		/// <summary>
 		/// Creates a new delegate type that has the provided method signature.
 		/// </summary>
@@ -441,5 +507,216 @@ namespace HookGenExtender.Utilities.ILGeneratorParts {
 			return del;
 		}
 
+		public static (MethodDefUser[], FieldDefUser) CreateBinderMethodBodies(MirrorGenerator mirrorGenerator, TypeDef originalType, TypeDef binderType, TypeDef mirrorType, TypeSig originalImported, MemberRefUser originalWeakTypeField, ITypeDefOrRef instancesGeneric, MemberRef instancesField, MemberRef hasHookedInstance, MemberRef createHooksInstance) {
+			GenericInstSig originalWeakRef = new GenericInstSig(mirrorGenerator.WeakReferenceTypeSig, originalImported);
+			GenericInstSig extensibleWeakRef = new GenericInstSig(mirrorGenerator.WeakReferenceTypeSig, new GenericVar(0));
+
+			Instruction nop = new Instruction(OpCodes.Nop);
+			ITypeDefOrRef extensibleType = new GenericVar(0).ToTypeDefOrRef();
+			ITypeDefOrRef originalTypeWeakRef = originalWeakRef.ToTypeDefOrRef();
+			ITypeDefOrRef extensibleTypeWeakReference = extensibleWeakRef.ToTypeDefOrRef();
+
+			SharedGeneralSignatures signatures = mirrorGenerator.CommonSignatures.General;
+			MemberRefUser cwtTryGetValue = signatures.ReferenceCWTTryGetValue(instancesGeneric);
+			MemberRefUser cwtRemove = signatures.ReferenceCWTRemove(instancesGeneric);
+			MemberRefUser cwtAdd = signatures.ReferenceCWTAdd(instancesGeneric);
+			MemberRefUser setTarget = signatures.ReferenceWeakRefSetTarget(originalTypeWeakRef);
+			MemberRefUser weakRefCtor = signatures.ReferenceWeakRefCtor(extensibleTypeWeakReference);
+
+			// Before this can start, I need to get a list of every constructor of the original type.
+			List<MethodDef> ctors = originalType.FindConstructors().ToList();
+
+			// ENFORCE THIS:
+			// 0 is ALWAYS the default ctor.
+			ctors.Insert(0, new MethodDefUser(".ctor", MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void), MethodAttributes.SpecialName | MethodAttributes.RTSpecialName | MethodAttributes.Public));
+
+			// Now, a Bind method must be generated for each constructor.
+			// Each Bind method will search for an Extensible counterpart
+			// Take, for example, the constructor signature of Oracle:
+			// public Oracle(PhysicalObject ow) { }
+			// The Bind method will try to find the following:
+			// private ExtensibleOracle(Oracle @this, PhysicalObject ow) { }
+			// (Note that the ctor must be private!)
+
+			// These should be cached, so let's make a field to do that.
+			FieldDefUser constructorCache = new FieldDefUser("<Binder>ConstructorCache", new FieldSig(mirrorGenerator.cache.ImportAsTypeSig(typeof(System.Reflection.ConstructorInfo[]))));
+			CilBody cctor = binderType.FindOrCreateStaticConstructor().Body;
+			
+			
+			cctor.Instructions.Add(Hooks.OptimizedLdc_I4(ctors.Count));
+			cctor.Instructions.Add(OpCodes.Newarr.ToInstruction(constructorInfoSig.ToTypeDefOrRef()));
+			cctor.Instructions.Add(OpCodes.Stsfld.ToInstruction(constructorCache));
+			cctor.Instructions.Add(OpCodes.Ret.ToInstruction());
+
+			int ctorIndex = 0;
+			MethodDefUser[] result = new MethodDefUser[ctors.Count];
+			foreach (MethodDef constructor in ctors) {
+				constructor.SelectParameters(mirrorGenerator, out TypeSig[] inputParams, out _, out _, true);
+				TypeSig[] allInputParams = new TypeSig[inputParams.Length + 1];
+				allInputParams[0] = originalImported;
+				for (int i = 0; i < inputParams.Length; i++) {
+					allInputParams[i + 1] = inputParams[i];
+				}
+
+				MethodSig bindSig = MethodSig.CreateStatic(extensibleWeakRef, allInputParams);
+				MethodDefUser bind = new MethodDefUser("Bind", bindSig, MethodAttributes.Public | MethodAttributes.Static);
+				bind.SetParameterName(0, "toObject");
+				Parameter[] @params = constructor.Parameters.Where(param => !param.IsHiddenThisParameter && !param.IsReturnTypeParameter).ToArray();
+				for (int i = 0; i < @params.Length; i++) {
+					bind.SetParameterName(i + 1, @params[i].Name);
+				}
+				result[ctorIndex] = bind;
+
+				// Before anything, idiot-proof the function (this also prevents a serious bug later down the line in the event hooks).
+				Instruction loadInstances = OpCodes.Ldsfld.ToInstruction(instancesField);
+
+				CilBody body = new CilBody();
+				Local instance = new Local(new GenericVar(0), "instance");
+				Local ctor = new Local(constructorInfoSig, "constructor");
+				body.Variables.Add(instance);
+				body.Variables.Add(ctor);
+
+				body.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Callvirt.ToInstruction(getType));
+				body.Instructions.Add(OpCodes.Ldtoken.ToInstruction(originalImported.ToTypeDefOrRef()));
+				body.Instructions.Add(OpCodes.Call.ToInstruction(getTypeFromHandle));
+				body.Instructions.Add(OpCodes.Call.ToInstruction(typeEquality));
+				body.Instructions.Add(OpCodes.Brtrue_S.ToInstruction(loadInstances));
+				/////
+				body.Instructions.Add(OpCodes.Ldstr.ToInstruction("Invalid attempt to call Bind with an inherited type. The type passed into bind must *exactly* match the original counterpart to the type that the Extensible class extends."));
+				body.Instructions.Add(OpCodes.Newobj.ToInstruction(signatures.InvalidOperationExceptionCtor));
+				body.Instructions.Add(OpCodes.Throw.ToInstruction());
+				/////
+
+				body.Instructions.Add(loadInstances);
+				body.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Ldloca_S.ToInstruction(instance));
+				body.Instructions.Add(OpCodes.Callvirt.ToInstruction(cwtTryGetValue));
+				body.Instructions.Add(OpCodes.Ldc_I4_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Ceq.ToInstruction());
+				Instruction throwMsg = new Instruction(OpCodes.Ldstr, $"Duplicate binding! Only one instance of your current Extensible type can be bound to an instance of type {originalImported.GetName()} at a time. In general, you should explicitly call TryReleaseCurrentBinding to free the binding immediately rather than waiting on the chance of garbage collection.");
+				body.Instructions.Add(OpCodes.Brfalse.ToInstruction(throwMsg));
+				// Stack is empty here (and after the branch jump).
+
+				// CTOR CALL GOES HERE //
+
+				// Start by finding it:
+				body.Instructions.Add(OpCodes.Ldsfld.ToInstruction(constructorCache));
+				body.Instructions.Add(Hooks.OptimizedLdc_I4(ctorIndex));
+				// Check if it exists first.
+				Instruction loadConstructor = OpCodes.Ldloc_1.ToInstruction();
+				body.Instructions.Add(OpCodes.Ldelem.ToInstruction(constructorInfoSig.ToTypeDefOrRef()));
+				body.Instructions.Add(OpCodes.Stloc_1.ToInstruction());
+				body.Instructions.Add(OpCodes.Ldloc_1.ToInstruction());
+				body.Instructions.Add(OpCodes.Ldnull.ToInstruction());
+				body.Instructions.Add(OpCodes.Ceq.ToInstruction());
+				body.Instructions.Add(OpCodes.Brfalse.ToInstruction(loadConstructor)); // Jump to the call, the cache already contains a value.
+																					   // ^ stack has no elements here.
+
+
+				// Load the type of the mirror.
+				body.Instructions.Add(OpCodes.Ldtoken.ToInstruction(mirrorType)); // ...
+				body.Instructions.Add(OpCodes.Call.ToInstruction(getTypeFromHandle)); // ...type
+
+				const int ctorSearchFlags = (int)BindingFlags.NonPublic;
+				int effectiveCtorSearchFlags = ctorSearchFlags;
+				if (ctorIndex > 0) {
+					effectiveCtorSearchFlags |= (int)BindingFlags.DeclaredOnly; // index 0 can be inherited.
+				}
+				body.Instructions.Add(Hooks.OptimizedLdc_I4(effectiveCtorSearchFlags)); // bindingFlags
+				body.Instructions.Add(OpCodes.Ldnull.ToInstruction()); // binder
+
+				// below: types
+				body.Instructions.Add(Hooks.OptimizedLdc_I4(allInputParams.Length));
+				body.Instructions.Add(OpCodes.Newarr.ToInstruction(typeTypeRef));
+				if (allInputParams.Length > 0) {
+					body.Instructions.Add(OpCodes.Dup.ToInstruction());
+					for (int i = 0; i < allInputParams.Length; i++) {
+						body.Instructions.Add(Hooks.OptimizedLdc_I4(i));
+						body.Instructions.Add(OpCodes.Ldtoken.ToInstruction(allInputParams[i].ToTypeDefOrRef()));
+						body.Instructions.Add(OpCodes.Call.ToInstruction(getTypeFromHandle));
+						body.Instructions.Add(OpCodes.Stelem_Ref.ToInstruction());
+						if (i < allInputParams.Length - 1) {
+							body.Instructions.Add(OpCodes.Dup.ToInstruction());
+						}
+					}
+				}
+
+				body.Instructions.Add(OpCodes.Ldnull.ToInstruction()); // modifiers
+				body.Instructions.Add(OpCodes.Callvirt.ToInstruction(getConstructor)); // ctorinfo on stack now, with the array and index preceeding it in that order
+				body.Instructions.Add(OpCodes.Box.ToInstruction(constructorInfoSig.ToTypeDefOrRef()));
+				body.Instructions.Add(OpCodes.Stloc_1.ToInstruction());
+				body.Instructions.Add(OpCodes.Ldloc_1.ToInstruction());
+				body.Instructions.Add(OpCodes.Ldnull.ToInstruction()); // Load null
+				body.Instructions.Add(OpCodes.Ceq.ToInstruction()); // ctor == null?
+				Instruction loadCtorInfo = OpCodes.Ldsfld.ToInstruction(constructorCache);
+				body.Instructions.Add(OpCodes.Brfalse_S.ToInstruction(loadCtorInfo)); // False: store, true continue
+				////
+				body.Instructions.Add(OpCodes.Ldstr.ToInstruction("Illegal class setup. To use any given version of Binder<T>.Bind() you must declare an equal constructor (i.e. to use Bind(original, int, float) you must declare a *private* constructor in your type YourType(original, int, float) : base(original) { ... }"));
+				body.Instructions.Add(OpCodes.Newobj.ToInstruction(mirrorGenerator.CommonSignatures.General.InvalidOperationExceptionCtor));
+				body.Instructions.Add(OpCodes.Throw.ToInstruction());
+				////
+
+				body.Instructions.Add(loadCtorInfo);
+				body.Instructions.Add(Hooks.OptimizedLdc_I4(ctorIndex));
+				body.Instructions.Add(OpCodes.Ldloc_1.ToInstruction());
+				body.Instructions.Add(OpCodes.Stelem.ToInstruction(constructorInfoSig.ToTypeDefOrRef()));
+
+				/////////////////////////
+				
+				body.Instructions.Add(loadConstructor); // ctor info.
+				// ctorInfo.Invoke(params object[] args);
+				body.Instructions.Add(Hooks.OptimizedLdc_I4(allInputParams.Length));
+				body.Instructions.Add(OpCodes.Newarr.ToInstruction(mirrorGenerator.MirrorModule.CorLibTypes.Object));
+				if (allInputParams.Length > 0) {
+					body.Instructions.Add(OpCodes.Dup.ToInstruction());
+					for (int i = 0; i < allInputParams.Length; i++) {
+						body.Instructions.Add(Hooks.OptimizedLdc_I4(i));
+						body.Instructions.Add(Hooks.OptimizedLdarg(i));
+						body.Instructions.Add(OpCodes.Stelem_Ref.ToInstruction());
+						if (i < allInputParams.Length - 1) {
+							body.Instructions.Add(OpCodes.Dup.ToInstruction());
+						}
+					}
+				}
+				body.Instructions.Add(OpCodes.Callvirt.ToInstruction(ctorInfoInvoke));
+				body.Instructions.Add(OpCodes.Box.ToInstruction(mirrorGenerator.MirrorModule.CorLibTypes.Object));
+				body.Instructions.Add(OpCodes.Castclass.ToInstruction(instance.Type.ToTypeDefOrRef()));
+
+				body.Instructions.Add(OpCodes.Stloc_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Ldloc_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Box.ToInstruction(extensibleType));
+				body.Instructions.Add(OpCodes.Ldfld.ToInstruction(originalWeakTypeField));
+				body.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Callvirt.ToInstruction(setTarget));
+				body.Instructions.Add(OpCodes.Ldsfld.ToInstruction(instancesField));
+				body.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Ldloc_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Callvirt.ToInstruction(cwtAdd));
+				body.Instructions.Add(OpCodes.Ldloc_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Newobj.ToInstruction(weakRefCtor)); // Need to remember this value here.
+
+				// Create hooks real quick.
+				body.Instructions.Add(OpCodes.Ldsfld.ToInstruction(hasHookedInstance));
+				body.Instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());
+				body.Instructions.Add(OpCodes.Beq_S.ToInstruction(nop));
+				body.Instructions.Add(OpCodes.Ldloc_0.ToInstruction());
+				body.Instructions.Add(OpCodes.Call.ToInstruction(createHooksInstance));
+				body.Instructions.Add(OpCodes.Ldc_I4_1.ToInstruction());
+				body.Instructions.Add(OpCodes.Stsfld.ToInstruction(hasHookedInstance));
+
+				body.Instructions.Add(nop);
+
+				body.Instructions.Add(OpCodes.Ret.ToInstruction());
+
+				body.Instructions.Add(throwMsg);
+				body.Instructions.Add(OpCodes.Newobj.ToInstruction(signatures.InvalidOperationExceptionCtor));
+				body.Instructions.Add(OpCodes.Throw.ToInstruction());
+
+				bind.Body = body;
+				ctorIndex++;
+			}
+			return (result, constructorCache);
+		}
 	}
 }

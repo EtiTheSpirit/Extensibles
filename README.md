@@ -33,13 +33,25 @@ public class MyPlayer : Extensible.Player {
 
 	private bool _gotPermissionToDie = false;
 
+	MyPlayer(Player original, AbstractCreature creature, World world) {
+		// This constructor will be called by the binder (see below).
+		// Note that this constructor *MUST* be private. You can do this by having no access modifier (as done here) or explicitly putting private, up to you.
+		// If the constructor is not private, the binder will raise an exception reminding you to do so (this is to relay the fact that you should not be
+		// calling your ctors manually!)
+
+		// You MUST declare a constructor like this to use its corresponding bind method! If this constructor was missing, and Bind(player, abstractCreature, world)
+		// got called, the Binder would raise an exception because this constructor was missing.
+	}
+
 	// Call this from the mod's Awake()/OnEnable()
 	internal static void Initialize() {
 		On.Player.ctor += (originalMethod, @this, abstractCreature, world) => {
-			if (@this.name == MyIDs.MyCharacter) {
-				Binder<MyPlayer>.Bind(@this); // This is where the magic happens.
-			}
 			originalMethod(@this, abstractCreature, world);
+			if (@this.name == MyIDs.MyCharacter) {
+				Binder<MyPlayer>.Bind(@this, abstractCreature, world); // This is where the magic happens.
+				// Notice that the bind method matches the signature of the constructor hook. There is also a default variant of Bind (that only takes @this)
+				// You shouldn't do any object initialization here, do that in your constructor instead.
+			}
 		};
 		On.Player.Destroy += (originalMethod, @this) => {
 			bool unbound = Binder<MyPlayer>.TryReleaseCurrentBinding(@this);
@@ -57,12 +69,10 @@ public class MyPlayer : Extensible.Player {
 # Limitations
 - Extensibles cannot detect construction of original counterparts for automatic binding. 
   - Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
-- Extensibles cannot extend constructors or finalizers (but it *can* extend a `Dispose` method, if present).
-  - The current setup relies on a parameterless constructor existing in the developer's extensible class. Any other constructors will not be used and are considered invalid. I could likely change this by calling constructors that match a signature, and by adding more `Bind` methods to the Binder for a particular class (i.e. a `Bind` method that corresponds to each constructor of the original class) but ultimately the best way to do this is up in the air.
-- Extensibles does not generate documentation.
-  - I would like it to do this, this should not be too hard. It won't document overrides but it will document the extensible type, the binder, and all extensible-managed parts.
+- Extensibles cannot extend finalizers (but it *can* extend a `Dispose` method, if present).
+  - Extensibles does not extend constructors either, but a unique `Bind` method is generated for each original constructor, allowing you to *mimic* original constructors instead.
 - Extensibles does not override methods with generic type parameters.
-  - This could probably be done later on.
+  - This could probably be done later on, but for now, BIE doesn't do it so I won't either.
 
 # Warnings
 

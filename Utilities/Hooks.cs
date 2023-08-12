@@ -26,7 +26,8 @@ namespace HookGenExtender.Utilities {
 		/// <param name="argN"></param>
 		/// <returns></returns>
 		public static Instruction OptimizedLdarg(int argN, bool asReference = false) {
-			if (argN < byte.MaxValue) return new Instruction(asReference ? OpCodes.Ldarga_S : OpCodes.Ldarg_S, ParameterIndex(argN));
+			// If the value is greater than 3, but less than the byte max value, use _S.
+			if (argN > 3 && argN < byte.MaxValue) return new Instruction(asReference ? OpCodes.Ldarga_S : OpCodes.Ldarg_S, ParameterIndex(argN));
 			if (asReference) return new Instruction(OpCodes.Ldarga, ParameterIndex(argN));
 			return argN switch {
 				0 => OpCodes.Ldarg_0.ToInstruction(),
@@ -43,7 +44,8 @@ namespace HookGenExtender.Utilities {
 		/// <param name="value"></param>
 		/// <returns></returns>
 		public static Instruction OptimizedLdc_I4(int value) {
-			if (value >= sbyte.MinValue && value <= sbyte.MaxValue) return new Instruction(OpCodes.Ldc_I4_S, (sbyte)value);
+			// If the value is within the sbyte range, and it's not within the range of [-1, 8], use _S.
+			if (value >= sbyte.MinValue && value <= sbyte.MaxValue && (value < -1 || value > 8)) return new Instruction(OpCodes.Ldc_I4_S, (sbyte)value);
 			return value switch {
 				-1 => OpCodes.Ldc_I4_M1.ToInstruction(),
 				0 => OpCodes.Ldc_I4_0.ToInstruction(),

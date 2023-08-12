@@ -12,6 +12,7 @@ namespace HookGenExtender.Utilities {
 	/// This class is a utility for <see cref="MirrorGenerator"/> that keeps track of the top-most classes that declare
 	/// specific members, so that binders do not generate overlapping bindings.
 	/// </summary>
+	[Obsolete("The inherited member technique introduces too many bugs. Do not use this technique.", true)]
 	public sealed class BinderOwnerHelper {
 		
 		public MirrorGenerator Generator { get; }
