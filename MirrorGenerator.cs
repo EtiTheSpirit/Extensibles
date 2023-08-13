@@ -34,7 +34,7 @@ namespace HookGenExtender {
 	/// behavior is extremely powerful and allows hooks to more naturally operate in tandem with the original class, rather than as external components that are
 	/// injected into the original.
 	/// </summary>
-	public sealed class MirrorGenerator {
+	public sealed class MirrorGenerator : IDisposable {
 
 		/// <summary>
 		/// This is the type of private used when declaring private fields (because C# has more than one level of private internally).
@@ -54,7 +54,7 @@ namespace HookGenExtender {
 		/// <summary>
 		/// The version of the current Extensibles module. This is used by the generator to determine if the existing DLL in the BepInEx folder is outdated.
 		/// </summary>
-		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 6, 0, 0);
+		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 7, 0, 0);
 
 		/// <summary>
 		/// A cached lookup to <c>WeakReference&lt;&gt;</c>
@@ -339,22 +339,39 @@ namespace HookGenExtender {
 			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
 			elapsed += time;
 			Console.WriteLine($"Generating type contents ({current} of {real}... // This step might take a while...) took {time} seconds.");
+
+			ITypeDefOrRef asmFileVerAttr = cache.Import(typeof(System.Reflection.AssemblyVersionAttribute));
+			MemberRefUser fileVerCtor = new MemberRefUser(MirrorModule, ".ctor", MethodSig.CreateInstance(MirrorModule.CorLibTypes.Void, MirrorModule.CorLibTypes.String), asmFileVerAttr);
+			CustomAttribute version = new CustomAttribute(fileVerCtor, new CAArgument[] { new CAArgument(MirrorModule.CorLibTypes.String, CURRENT_EXTENSIBLES_VERSION.ToString()) });
+			_asm.CustomAttributes.Add(version);
+
+			ITypeDefOrRef secPermsTypeRef = cache.Import(typeof(System.Security.Permissions.SecurityPermissionAttribute));
+			//TypeSig securityAction = cache.ImportAsTypeSig(typeof(System.Security.Permissions.SecurityAction));
+			// MemberRefUser secPermsCtor = new MemberRefUser(MirrorModule, ".ctor", MethodSig.CreateInstance(MirrorModule.CorLibTypes.Void, securityAction), secPermsTypeRef);
+
+			List<CANamedArgument> namedArgs = new List<CANamedArgument> { new CANamedArgument(false, MirrorModule.CorLibTypes.Boolean, nameof(System.Security.Permissions.SecurityPermissionAttribute.SkipVerification), new CAArgument(MirrorModule.CorLibTypes.Boolean, true)) };
+			//CustomAttribute secPerms = new CustomAttribute(secPermsCtor, new CAArgument[] { new CAArgument(securityAction, System.Security.Permissions.SecurityAction.RequestMinimum) }, namedArgs);
+			//_asm.CustomAttributes.Add(secPerms);
+			_asm.DeclSecurities.Add(new DeclSecurityUser(SecurityAction.RequestMinimum, new List<SecurityAttribute>() { new SecurityAttribute(secPermsTypeRef, namedArgs) }));
+
+			_asm.Version = CURRENT_EXTENSIBLES_VERSION;
+			MirrorModule.CreatePdbState(PdbFileKind.PortablePDB);
+
 			Console.WriteLine($"Done processing! Took {elapsed} seconds.");
 		}
 
 		public void Save(FileInfo to, FileInfo documentation = null) {
-			/*
-			ITypeDefOrRef asmFileVerAttr = cache.Import(typeof(System.Reflection.AssemblyVersionAttribute));
-			MemberRefUser ctor = new MemberRefUser(MirrorModule, ".ctor", MethodSig.CreateInstance(MirrorModule.CorLibTypes.Void, MirrorModule.CorLibTypes.String), asmFileVerAttr);
-			CustomAttribute version = new CustomAttribute(ctor, new CAArgument[] { new CAArgument(MirrorModule.CorLibTypes.String, CURRENT_EXTENSIBLES_VERSION.ToString()) });
-			_asm.CustomAttributes.Add(version);
-			_asm.ManifestModule.CustomAttributes.Add(version);
-			*/
+			
+			// TO FUTURE XAN/MAINTAINERS:
+			// For *some reason*, this value here (added by the custom attribute) is used when loading the assembly from file to do a version check.
+			
+			// For *some other reason*, this is not, but without it, tools like DNSpy see the default 1.0.0.0 version.
+
+
 			Console.WriteLine("Saving to disk...");
 			if (to.Exists) to.Delete();
 			using FileStream stream = to.Open(FileMode.CreateNew);
-			MirrorModule.CreatePdbState(PdbFileKind.PortablePDB);
-			_asm.Version = CURRENT_EXTENSIBLES_VERSION;
+			
 			_asm.Write(stream);
 
 			if (documentation != null) {
@@ -365,7 +382,15 @@ namespace HookGenExtender {
 			Console.WriteLine($"Done! {to.Name} has been written to {to.Directory.FullName} and is ready for use.");
 		}
 
-
+		public void Dispose() {
+			MirrorModule.Dispose();
+			Module.Dispose();
+			BepInExHooksModule.Dispose();
+			cache.Dispose();
+			mirrorLookup.Clear();
+			_originalRefs.Clear();
+			_validMembers.Clear();
+		}
 
 		/// <summary>
 		/// Generates the entire type for a mirror, and registers it to the mirror module.
@@ -380,7 +405,7 @@ namespace HookGenExtender {
 
 			BindMethodMirrors(original, from, replacement, binderType, strongRef, tExtendsExtensible, createHooks);
 			BindFieldMirrors(original, replacement, strongRef);
-			BindPropertyMirrors(original, replacement, strongRef, binderType, createHooks, tExtendsExtensible);
+			BindPropertyMirrors(original, from, replacement, strongRef, binderType, createHooks, tExtendsExtensible);
 
 			// Now close the binder class's static constructor
 			// ILGenerators.CloseInstancesConstructor(this, replacement, binder);
@@ -414,7 +439,7 @@ namespace HookGenExtender {
 			PropertyDefUser strongRef = new PropertyDefUser(originalMemberName, new PropertySig(true, originalTypeSig));
 			ILGenerators.CreateOriginalReferencer(this, strongRef, weakRef, weakRefInstance);
 
-			MethodDefUser ctorDef = ILGenerators.CreateConstructor(this, originalTypeRef.ToTypeSig(), weakRef, weakRefInstance);
+			MethodDefUser ctorDef = ILGenerators.CreateConstructor(this, originalTypeDef, originalTypeRef.ToTypeSig(), weakRef, weakRefInstance);
 
 			TypeDef currentTypeDef = originalTypeDef;
 			while (true) {
@@ -448,9 +473,6 @@ namespace HookGenExtender {
 
 			FieldDefUser hasCreatedHooks = new FieldDefUser("_hasCreatedHooks", new FieldSig(MirrorModule.CorLibTypes.Boolean), PRIVATE_FIELD_TYPE | FieldAttributes.Static);
 
-			TypeSig stringArray = cache.ImportAsTypeSig(typeof(string[]));
-			FieldDefUser memberNames = new FieldDefUser("_memberNames", new FieldSig(stringArray), PRIVATE_FIELD_TYPE | FieldAttributes.Static);
-
 			GenericVar tExtendsExtensible = new GenericVar(0, binder);
 			TypeSig sourceType = source.ToTypeSig();
 
@@ -468,7 +490,6 @@ namespace HookGenExtender {
 			binder.Fields.Add(ctorCache);
 			binder.Methods.Add(destroy);
 			binder.Methods.Add(createHooks);
-			binder.Fields.Add(memberNames);
 			binder.Fields.Add(hasCreatedHooks);
 
 
@@ -484,7 +505,7 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="props"></param>
 		/// <param name="inUserType"></param>
-		private void BindPropertyMirrors(TypeDef source, TypeDefUser inUserType, PropertyDefUser orgRef, TypeDefUser binder, MethodDefUser binderInit, GenericVar tExtendsExtensible) {
+		private void BindPropertyMirrors(TypeDef source, TypeRef originalTypeRef, TypeDefUser inUserType, PropertyDefUser orgRef, TypeDefUser binder, MethodDefUser binderInit, GenericVar tExtendsExtensible) {
 			foreach (PropertyDef orgProp in source.Properties) {
 				if (orgProp.IsStatic()) continue;
 				if (orgProp.DeclaringType != source) continue;
@@ -496,7 +517,7 @@ namespace HookGenExtender {
 				bool hasGetter = orgProp.GetMethod != null && !orgProp.GetMethod.IsAbstract;
 				bool hasSetter = orgProp.SetMethod != null && !orgProp.SetMethod.IsAbstract;
 
-				BIEProxiedPropertyResult result = ILGenerators.TryGenerateBIEProxiedProperty(this, mirror, orgProp, orgRef, binderInit, binder, tExtendsExtensible);
+				BIEProxiedPropertyResult result = ILGenerators.TryGenerateBIEProxiedProperty(this, originalTypeRef, inUserType, mirror, orgProp, orgRef, binderInit, binder, tExtendsExtensible);
 				inUserType.Properties.Add(mirror);
 				if (hasGetter) {
 					inUserType.Methods.Add(result.getProxy);
@@ -528,10 +549,10 @@ namespace HookGenExtender {
 				MemberRef orgField = cache.Import(field);
 				PropertyDefUser mirror = new PropertyDefUser(field.Name, PropertySig.CreateInstance(cache.Import(field.FieldType)));
 
-				ILGenerators.CreateFieldProxy(this, mirror, orgField, orgRef);
+				ILGenerators.CreateFieldProxy(this, mirror, field, orgField, orgRef);
 				inUserType.Properties.Add(mirror);
 				inUserType.Methods.Add(mirror.GetMethod);
-				inUserType.Methods.Add(mirror.SetMethod);
+				if (mirror.SetMethod != null) inUserType.Methods.Add(mirror.SetMethod); // Set will be null if the field is read only.
 			}
 		}
 

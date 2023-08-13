@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace HookGenExtender.Utilities {
-	public sealed class ImportCache {
+	public sealed class ImportCache : IDisposable {
 
 		private readonly Dictionary<Type, ITypeDefOrRef> _typeImports = new Dictionary<Type, ITypeDefOrRef>();
 		private readonly Dictionary<Type, TypeSig> _typeSigByTypeImports = new Dictionary<Type, TypeSig>();
@@ -47,6 +47,22 @@ namespace HookGenExtender.Utilities {
 		public MethodSpec Import(MethodSpec type) => _mtdSpecImports.GetOrCreate(type, _module.Import);
 		public MemberRef Import(MemberRef type) => _mbrRefImports.GetOrCreate(type, _module.Import);
 
-
+		public void Dispose() {
+			_typeImports.Clear();
+			_typeSigByTypeImports.Clear();
+			_fieldImports.Clear();
+			_methodImports.Clear();
+			_typeItfImports.Clear();
+			_typeDefImports.Clear();
+			_typeRefImports.Clear();
+			_typeSpecImports.Clear();
+			_typeSigImports.Clear();
+			_fieldItfImports.Clear();
+			_fieldDefImports.Clear();
+			_mtdItfImports.Clear();
+			_mtdDefImports.Clear();
+			_mtdSpecImports.Clear();
+			_mbrRefImports.Clear();
+		}
 	}
 }

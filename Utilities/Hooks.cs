@@ -26,8 +26,8 @@ namespace HookGenExtender.Utilities {
 		/// <param name="argN"></param>
 		/// <returns></returns>
 		public static Instruction OptimizedLdarg(int argN, bool asReference = false) {
-			// If the value is greater than 3, but less than the byte max value, use _S.
-			if (argN > 3 && argN < byte.MaxValue) return new Instruction(asReference ? OpCodes.Ldarga_S : OpCodes.Ldarg_S, ParameterIndex(argN));
+			// If the value is greater than 3 (or its a reference), but less than the byte max value, use _S.
+			if ((argN > 3 || asReference) && argN < byte.MaxValue) return new Instruction(asReference ? OpCodes.Ldarga_S : OpCodes.Ldarg_S, ParameterIndex(argN));
 			if (asReference) return new Instruction(OpCodes.Ldarga, ParameterIndex(argN));
 			return argN switch {
 				0 => OpCodes.Ldarg_0.ToInstruction(),
