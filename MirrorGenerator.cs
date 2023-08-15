@@ -143,6 +143,7 @@ namespace HookGenExtender {
 
 		internal readonly Dictionary<TypeDef, (TypeDefUser, TypeDefUser, TypeRef)> mirrorLookup = new Dictionary<TypeDef, (TypeDefUser, TypeDefUser, TypeRef)>();
 		private readonly Dictionary<TypeDefUser, TypeRef> _originalRefs = new Dictionary<TypeDefUser, TypeRef>();
+		private readonly Dictionary<TypeDefUser, TypeDef> _originalDefs = new Dictionary<TypeDefUser, TypeDef>();
 		private readonly HashSet<TypeDefUser> _validMembers = new HashSet<TypeDefUser>();
 
 		/// <summary>
@@ -210,7 +211,14 @@ namespace HookGenExtender {
 		/// </summary>
 		/// <param name="mirrorType"></param>
 		/// <returns></returns>
-		public TypeRef GetOriginal(TypeDefUser mirrorType) => _originalRefs[mirrorType];
+		public TypeRef GetOriginalRef(TypeDefUser mirrorType) => _originalRefs[mirrorType];
+
+		/// <summary>
+		/// Returns the definition (non-imported) to the original type that a mirror type is mirroring.
+		/// </summary>
+		/// <param name="mirrorType"></param>
+		/// <returns></returns>
+		public TypeDef GetOriginalDef(TypeDefUser mirrorType) => _originalDefs[mirrorType];
 
 		public void Generate() {
 			// For the record, I know that doing this in three loops is kinda shit and wasteful.
@@ -256,6 +264,7 @@ namespace HookGenExtender {
 				mirrorLookup[def] = (replacement, binder, imported);
 				_validMembers.Add(replacement);
 				_originalRefs[replacement] = imported;
+				_originalDefs[replacement] = def;
 				MirrorModule.Types.Add(replacement);
 
 				// This will incur a relatively high perf cost unfortunately.
@@ -403,13 +412,42 @@ namespace HookGenExtender {
 			//allowedMemberNames.UnionWith(binderHelper.GetExtendableMembersOf(replacement).Select(mbr => mbr.Name.ToString()));
 			(GenericVar tExtendsExtensible, TypeDefUser binderType, MethodDefUser createHooks) = InitializeExtensibleBinderClass(original, from, replacement, binder);
 
+			// TODO
+			// Okay, so here's the idea you had future Xan.
+			// You need to bind *all* members, including that of superclasses.
+			// In the system's current state, something like Player.Violence will not actually get invoked as a hook, it will work as a proxy though.
+			// This is because it's a member of Creature, not Player (which inherits from Creature).
+			// You need to fix this.
+			// Consider having CreateHooks receive a list of members to ignore (use HashSet for speed).
+			// This way, Player can call its own CreateHooks, and then it can invoke Creature.CreateHooks with an exclusion list of the methods that Player overrides.
+			// But this wouldn't work, as the system filters for DeclaredOnly
+			// You would need to disable it.
+			// Filtering manually is required, in that you must determine that the method is *not* declared by the extensible type.
+			
+			// You also need to handle shadowed members, which should not be a part of the exclusion list.
+			// Remember: BinderOwnerHelper.cs did *not* work and introduces many bugs and edge cases for issues.
+			// The exclusion list provided to CreateHooks should work.
+
 			BindMethodMirrors(original, from, replacement, binderType, strongRef, tExtendsExtensible, createHooks);
 			BindFieldMirrors(original, replacement, strongRef);
 			BindPropertyMirrors(original, from, replacement, strongRef, binderType, createHooks, tExtendsExtensible);
 
+			// Now we have to close the hooks body, by calling the supertype's method
+			if (!replacement.BaseType.ToTypeSig().IsCorLibType) {
+				TypeDefUser superBinder = mirrorLookup[_originalDefs[replacement.BaseType as TypeDefUser]].Item2;
+				GenericInstSig superBinderInstance = new GenericInstSig(superBinder.ToTypeSig().ToClassOrValueTypeSig(), new GenericVar(0));
+				MemberRef superCreateHooks = createHooks.MakeMemberReference(this, superBinderInstance.ToTypeDefOrRef(), false);
+				createHooks.Body.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+				createHooks.Body.Instructions.Add(OpCodes.Ldarg_1.ToInstruction());
+				createHooks.Body.Instructions.Add(OpCodes.Call.ToInstruction(superCreateHooks));
+			}
+
 			// Now close the binder class's static constructor
 			// ILGenerators.CloseInstancesConstructor(this, replacement, binder);
 			createHooks.Body.Instructions.Add(OpCodes.Ret.ToInstruction());
+
+			// To fix up the brtrue/brfalse jumps that were not marked short due to being uncertain.
+			createHooks.Body.OptimizeBranches();
 		}
 
 
@@ -466,9 +504,13 @@ namespace HookGenExtender {
 			genericParam.GenericParamConstraints.Add(new GenericParamConstraintUser(extensible));
 			binder.GenericParameters.Add(genericParam);
 
-			MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, new GenericVar(0));
+			ITypeDefOrRef hashSet = cache.Import(typeof(HashSet<>));
+			GenericInstSig stringHashSetSig = new GenericInstSig(hashSet.ToTypeSig().ToClassOrValueTypeSig(), MirrorModule.CorLibTypes.String);
+
+			MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, new GenericVar(0), stringHashSetSig);
 			MethodDefUser createHooks = new MethodDefUser("<Binder>CreateHooks", createHooksSig, PRIVATE_METHOD_TYPE | MethodAttributes.Static | MethodAttributes.SpecialName);
 			createHooks.SetParameterName(0, "extensibleInstance");
+			createHooks.SetParameterName(1, "skipBindingToMethods");
 			createHooks.Body = new CilBody();
 
 			FieldDefUser hasCreatedHooks = new FieldDefUser("_hasCreatedHooks", new FieldSig(MirrorModule.CorLibTypes.Boolean), PRIVATE_FIELD_TYPE | FieldAttributes.Static);

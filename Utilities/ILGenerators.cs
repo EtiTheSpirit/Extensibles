@@ -144,29 +144,31 @@ namespace HookGenExtender.Utilities {
 			// Above: Do not make it virtual, this might be confusing.
 
 			bool isReadOnly = originalField.Attributes.HasFlag(FieldAttributes.InitOnly);
-			MethodDefUser get = new MethodDefUser($"get_{mirrorProp.Name}", MethodSig.CreateInstance(mirrorGenerator.cache.Import(field.FieldSig.Type)), attrs);
-			MethodDefUser set = null;
 
-			CilBody getter = new CilBody();
-			getter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
-			getter.Instructions.Add(OpCodes.Call.ToInstruction(original.GetMethod));
-			getter.Instructions.Add(OpCodes.Ldfld.ToInstruction(field));
-			getter.Instructions.Add(OpCodes.Ret.ToInstruction());
-			get.Body = getter;
-
-			if (!isReadOnly) {
-				set = new MethodDefUser($"set_{mirrorProp.Name}", MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, mirrorGenerator.cache.Import(field.FieldSig.Type)), attrs);
-				CilBody setter = new CilBody();
-				setter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
-				setter.Instructions.Add(OpCodes.Call.ToInstruction(original.GetMethod));
-				setter.Instructions.Add(OpCodes.Ldarg_1.ToInstruction());
-				setter.Instructions.Add(OpCodes.Stfld.ToInstruction(field));
-				setter.Instructions.Add(OpCodes.Ret.ToInstruction());
-				set.Body = setter;
+			// Alright, so here's a fun trick:
+			TypeSig fieldType = mirrorGenerator.cache.Import(field.FieldSig.Type);
+			ByRefSig fieldTypeByRef = new ByRefSig(fieldType);
+			if (isReadOnly) {
+				MethodDefUser get = new MethodDefUser($"get_{mirrorProp.Name}", MethodSig.CreateInstance(fieldType), attrs);
+				CilBody getter = new CilBody();
+				getter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+				getter.Instructions.Add(OpCodes.Call.ToInstruction(original.GetMethod));
+				getter.Instructions.Add(OpCodes.Ldfld.ToInstruction(field));
+				getter.Instructions.Add(OpCodes.Ret.ToInstruction());
+				get.Body = getter;
+				mirrorProp.GetMethod = get;
+			} else {
+				MethodDefUser get = new MethodDefUser($"get_{mirrorProp.Name}", MethodSig.CreateInstance(fieldTypeByRef), attrs);
+				CilBody getter = new CilBody();
+				getter.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
+				getter.Instructions.Add(OpCodes.Call.ToInstruction(original.GetMethod));
+				getter.Instructions.Add(OpCodes.Ldflda.ToInstruction(field));
+				getter.Instructions.Add(OpCodes.Ret.ToInstruction());
+				get.Body = getter;
+				mirrorProp.PropertySig = new PropertySig(true, fieldTypeByRef);
+				mirrorProp.GetMethod = get;
 			}
 
-			mirrorProp.GetMethod = get;
-			mirrorProp.SetMethod = set;
 		}
 
 		#endregion
@@ -181,7 +183,7 @@ namespace HookGenExtender.Utilities {
 		/// <param name="originalRefProperty"></param>
 		/// <param name="settings"></param>
 		/// <returns></returns>
-		public static (MethodDefUser, FieldDefUser, FieldDefUser, MethodDefUser) TryGenerateBIEOrigCallAndProxies(MirrorGenerator mirrorGenerator, MethodDef original, PropertyDefUser originalRefProperty, TypeDefUser binderType, GenericVar tExtendsExtensible, TypeRef originalClass, MethodDef hookBinders) {
+		public static (MethodDefUser, FieldDefUser, FieldDefUser, MethodDefUser) TryGenerateBIEOrigCallAndProxies(MirrorGenerator mirrorGenerator, MethodDef original, PropertyDefUser originalRefProperty, TypeDefUser binderType, GenericVar tExtendsExtensible, TypeRef originalClass, MethodDef createHooksMtd) {
 			/* TO FUTURE XAN / MAINTAINERS:
 			 * The way this is implemented is complicated, to put it lightly.
 			 * For each and every possible hook, four things are generated in the Extensible class...
@@ -228,8 +230,8 @@ namespace HookGenExtender.Utilities {
 
 			CommonMembers.ProgramBinderCallManager(mirrorGenerator, originalClassSig, mirror, binderType, receiverImpl, bieOrigStoredDelegateCallback, hookRef.invoke, tExtendsExtensible);
 
-			CilBody cctorBody = hookBinders.Body; // This will have modifications beforehand. *Append* to this.
-			CommonMembers.CreateConditionalBinderCodeBlock(mirrorGenerator, cctorBody, binderType, mirror, receiverImpl, hookRef.hook);
+			CilBody createHooksBody = createHooksMtd.Body; // This will have modifications beforehand. *Append* to this.
+			CommonMembers.CreateConditionalBinderCodeBlock(mirrorGenerator, createHooksBody, binderType, mirror, receiverImpl, hookRef.hook);
 
 			return (mirror, bieOrigStoredDelegateCallback, isCallerInInvocation, receiverImpl);
 		}
