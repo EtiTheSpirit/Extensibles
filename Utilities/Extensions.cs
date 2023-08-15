@@ -103,7 +103,7 @@ namespace HookGenExtender.Utilities {
 		/// Sets the name of the parameter at the given index. Index 0 represents the first argument, excluding <see langword="this"/> on instance methods.
 		/// </summary>
 		/// <param name="onMethod">The method to modify.</param>
-		/// <param name="index">The parameter index. On instance methods, 0 represents the first user-defined argument (that is, it does <em>not</em> represent <see langword="this"/>)</param>
+		/// <param name="index">The parameter index. On instance methods, 0 represents the first user-defined argument (that is, it does <em>not</em> represent the "<see langword="this"/>" keyword)</param>
 		/// <param name="name">The name of this parameter.</param>
 		public static void SetParameterName(this MethodDef onMethod, int index, string name) {
 			Parameter param = onMethod.Parameters[index];

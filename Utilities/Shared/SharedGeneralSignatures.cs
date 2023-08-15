@@ -19,6 +19,11 @@ namespace HookGenExtender.Utilities.Shared {
 		public MethodSig InvalidOperationExceptionCtorSig { get; }
 
 		/// <summary>
+		/// Signature of <see langword="new"/> <see cref="InvalidCastException(string)"/>
+		/// </summary>
+		public MethodSig InvalidCastExceptionCtorSig { get; }
+
+		/// <summary>
 		/// Signature of <see cref="object.GetType"/>
 		/// </summary>
 		public MethodSig GetTypeSig { get; }
@@ -27,6 +32,11 @@ namespace HookGenExtender.Utilities.Shared {
 		/// Reference to <see langword="new"/> <see cref="InvalidOperationException(string)"/>
 		/// </summary>
 		public MemberRefUser InvalidOperationExceptionCtor { get; }
+
+		/// <summary>
+		/// Reference to <see langword="new"/> <see cref="InvalidCastException(string)"/>
+		/// </summary>
+		public MemberRefUser InvalidCastExceptionCtor { get; }
 
 		/// <summary>
 		/// Reference to <see cref="object.GetType"/>
@@ -108,6 +118,8 @@ namespace HookGenExtender.Utilities.Shared {
 			MirrorGenerator mirrorGenerator = common.MirrorGenerator;
 			InvalidOperationExceptionCtorSig = MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, mirrorGenerator.MirrorModule.CorLibTypes.String);
 			InvalidOperationExceptionCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", InvalidOperationExceptionCtorSig, mirrorGenerator.cache.Import(typeof(InvalidOperationException)));
+			InvalidCastExceptionCtorSig = MethodSig.CreateInstance(mirrorGenerator.MirrorModule.CorLibTypes.Void, mirrorGenerator.MirrorModule.CorLibTypes.String);
+			InvalidCastExceptionCtor = new MemberRefUser(mirrorGenerator.MirrorModule, ".ctor", InvalidCastExceptionCtorSig, mirrorGenerator.cache.Import(typeof(InvalidCastException)));
 
 			GetTypeSig = MethodSig.CreateInstance(CommonMembers.typeTypeSig);
 			GetTypeMtd = new MemberRefUser(mirrorGenerator.MirrorModule, "GetType", GetTypeSig, mirrorGenerator.MirrorModule.CorLibTypes.Object.ToTypeDefOrRef());

@@ -31,7 +31,11 @@ Each class contains "mirrored" members that follow these rules:
 		* In general, this means that you should not worry about how hooks will behave. All of the complex behavior and what-ifs are handled by the system.
 * Properties are mirrored just like methods, with the proxy/hook behavior being added to their getter and/or setter independently.
 	* Properties are bound via `Hook`, thus they too will be compatible with any mods that use RuntimeDetour to hook into properties.
-* Implicit casts to all vanilla base types are included.
+
+There are additional features as well:
+* Extensible types can be implicitly cast to their original counterparts, including base types of the original counterpart.
+* Original types can be explicitly cast into an extensible type to resolve an instance of said type, though if there is no binding it will raise `InvalidCastException`. This can be used in cases where you know for a fact that a binding *should* exist.
+	* To avoid the exception, `Binder<T>` has a `TryGetBoundInstance` method that will try to return a binding for an original type.
 
 # Example implementation
 

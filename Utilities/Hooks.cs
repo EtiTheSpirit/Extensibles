@@ -18,10 +18,10 @@ namespace HookGenExtender.Utilities {
 		/// </summary>
 		/// <param name="arg"></param>
 		/// <returns></returns>
-		private static Parameter ParameterIndex(int arg) => new Parameter(arg);
+		public static Parameter ParameterIndex(int arg) => new Parameter(arg);
 		
 		/// <summary>
-		/// Returns the version of Ldarg best suited for the input argument index.
+		/// Returns the version of Ldarg best suited for the input argument index. This also allows inputting the argument index as an int32.
 		/// </summary>
 		/// <param name="argN"></param>
 		/// <returns></returns>
@@ -93,6 +93,14 @@ namespace HookGenExtender.Utilities {
 			throw new NotSupportedException("The provided member type is not supported.");
 		}
 
-
+		/// <summary>
+		/// Alias to <see cref="Parameter.CreateParamDef"/> that returns the existing or new instance.
+		/// </summary>
+		/// <param name="param"></param>
+		/// <returns></returns>
+		public static ParamDef GetOrCreateParamDef(this Parameter param) {
+			param.CreateParamDef();
+			return param.ParamDef;
+		}
 	}
 }

@@ -482,9 +482,12 @@ namespace HookGenExtender {
 			TypeDef currentTypeDef = originalTypeDef;
 			while (true) {
 				TypeSig currentSig = cache.Import(currentTypeDef).ToTypeSig();
-				MethodDefUser cast = new MethodDefUser("op_Implicit", MethodSig.CreateStatic(currentSig, to.ToTypeSig()), MethodAttributes.Static | MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
-				ILGenerators.CreateImplicitCastToOriginal(this, to, strongRef, cast);
-				to.Methods.Add(cast);
+				MethodDefUser castImp = new MethodDefUser("op_Implicit", MethodSig.CreateStatic(currentSig, to.ToTypeSig()), MethodAttributes.Static | MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
+				MethodDefUser castExp = new MethodDefUser("op_Explicit", MethodSig.CreateStatic(to.ToTypeSig(), currentSig), MethodAttributes.Static | MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
+				ILGenerators.CreateImplicitCastToOriginal(this, to, strongRef, castImp);
+				ILGenerators.CreateExplicitCastFromOriginal(this, originalTypeDef, to, strongRef, castExp);
+				to.Methods.Add(castImp);
+				to.Methods.Add(castExp);
 
 				if (currentTypeDef.BaseType.ToTypeSig() is CorLibTypeSig) break;
 				if (currentTypeDef.BaseType is not TypeDef) break;
@@ -525,16 +528,16 @@ namespace HookGenExtender {
 			GenericInstSig binderInstance = new GenericInstSig(binder.ToTypeSig().ToClassOrValueTypeSig(), tExtendsExtensible);
 
 			ILGenerators.GenerateInstancesConstructor(this, extensible, binder, binderInstance, instancesCWT);
-			(MethodDefUser[] binds, MethodDefUser destroy, FieldDefUser ctorCache) = ILGenerators.GenerateBinderBindAndDestroyMethods(this, sourceDef, extensible, binder, binderInstance, sourceType, instancesCWT, hasCreatedHooks, createHooks);
+			(MethodDefUser[] binds, MethodDefUser destroy, FieldDefUser ctorCache, MethodDefUser tryGetBoundInstance) = ILGenerators.GenerateBinderBindAndDestroyMethods(this, sourceDef, extensible, binder, binderInstance, sourceType, instancesCWT, hasCreatedHooks, createHooks);
 			foreach (MethodDefUser bind in binds) {
 				binder.Methods.Add(bind);
 			}
 			binder.Fields.Add(ctorCache);
+			binder.Fields.Add(hasCreatedHooks);
 			binder.Methods.Add(destroy);
 			binder.Methods.Add(createHooks);
-			binder.Fields.Add(hasCreatedHooks);
-
-
+			binder.Methods.Add(tryGetBoundInstance);
+			
 			// REMEMBER: The function generator (where it ports the methods into the extensible type) is responsible for adding the four instructions
 			// required to register the equivalent binder method. This leaves the function open (it has no ret) which is added at the end of the type generator
 			// above. Do not do that here. Do not generate static constructor / event bind code here!
