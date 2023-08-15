@@ -1,41 +1,50 @@
-# Extensibles, The BepInEx Hook Extension Library
-
-## Preliminary Warning
+# Preliminary Warning
 
 Extensibles is in a *testing phase*. It has not been widely tested outside of relatively niche scenarios and *may have unexpected behavior.* Until more extensive testing is done, **use Extensibles at your own risk.** There might be some nasty bugs that I simply didn't or couldn't foresee that brick compatibility with other mods or cause otherwise unpredictable errors.
 
 In general, **it is NOT recommended to use this for production mods at this time. Play with it and see if it works for you instead.**
 
-## Introduction
 
-HookGenExtender, or "Extensibles", is an experimental productivity toolkit designed to layer on top of BepInEx's built-in Hooks library. It is closely inspired by the underlying behavior of Sponge's [Mixin](https://github.com/SpongePowered/Mixin) for *Minecraft*. The behavior of Mixins requires hook classes to be instances (rather than static, like BIE hooks), and just before startup, the bytecode of a modder's mixin class is merged in with that of the class they are modding. The result is that the mixin class gets melded into the original class, and thus it gets to behave as if it is an instance of the class it is injecting into; for all intents and purposes, it *is* that class.
+# Extensibles, The BepInEx Hook Extension Library
 
-This behavior is extremely useful for games like *Rain World* (which is what this was designed for originally), which notoriously *avoids* object inheritence for variations of the same class, making patches often quite annoying and data storage for custom objects even worse, heavily relying on `ConditionalWeakTable` (an example of this is its `Player` class, which has all campaign-unique behaviors for every character smashed into that single `Player` class).
+Extensibles is an experimental productivity toolkit designed to layer on top of BepInEx's built-in Hooks library. 
 
-Of course, this isn't working in Java, so there's no fancy classloader hacks and abuses of Java's lack of compile-time interface cast checking going on here. This system instead uses some clever, albeit messy, IL generation to (im)politely proxy calls through the three ring circus to allow writing pseudo-inheritence.
+It is closely inspired by the underlying behavior of Sponge's [Mixin](https://github.com/SpongePowered/Mixin) for *Minecraft*, which uses instance-based injections that meld bytecode together between the original class and the mixin class, allowing the mixin to behave as if it were an instance of the original type.
 
-# Okay, so what does that actually mean? How do I use it?
+This Mixin-like behavior is extremely useful for games like *Rain World* (which is what this was designed for originally), which notoriously *avoids* object inheritence for variations of the same class. This makes patches quite annoying to work with, and custom data storage very tedious. An example of this is its `Player` class, which has *all* campaign-unique behaviors for *every playable character in the game* smashed into it.
 
-This tool creates the `Extensible` namespace (comparable to BIE's `On` namespace), which contains its own version of all classes from the base game. These Extensible classes declare all fields (as properties that use get/set to read/write the original field), properties, and methods of the original class virtually.
+Extensibles aims to remedy some of the pain of this odd design by allowing you to write your classes as if you are that class.
 
-To use it, make a new class that extends the extensible counterpart (i.e. `class MyCoolCustomPlayer : Extensible.Player`). Override any methods or properties that you wish to replace here.
+## How does it work?
 
-The signature behavior that makes Extensibles so powerful is its **runtime hook redirector.** In simple terms...
-* If the vanilla method (and thus your override) is called by a hook, calling `base.Method()` is identical to calling `orig(self)` in a traditional BIE hook.
-* If the vanilla method (or your override) is called by you manually, calling `base.Method()` is identical to calling `Original.Method()`, and will fire hooks for BIE so that other mods have their chance to run as well.
-  * Importantly, doing this will *not* re-run your method, the hook system will skip yours to prevent re-entry.
+This tool creates the `Extensible` namespace (comparable to BIE's `On` namespace), which contains its own version of all classes from the base game. 
 
-If this seems a bit confusing, the takeaway is that you write your code like you would expect to write an inherited class in any other program, and it just works(tm), including with other mods.
-
-**Perhaps most importantly, this rule applies to properties too.** Extensibles allows you to declare property hooks in the same exact manner that method hooks are made (via overriding them).
+Each class contains "mirrored" members that follow these rules:
+* All fields are exposed as `ref` properties. This way you can read/write to them normally, but also make `ref`s to them as if they are fields.
+	* `readonly` fields remain `readonly`, in the form of standard (non-`ref`) properties without a setter.
+* All methods are mirrored in a wrapper that adds behavior to the `base.Method()` call. **This is where Extensibles's most complex behavior comes in, so this might be difficult to keep track of.**
+	* Methods are simultaneously proxies to the original class *and* BIE hooks that are automatically subscribed!
+	* If you *manually call your method in your extensible class*, calling `base.Method()` is identical to calling `Original.Method()` (the vanilla method) and *will invoke other hooks.*
+		* Internally, Extensibles will *prevent your method from being re-entered.* Do *not* write code to handle a hook invoking your method while you are invoking it. This is already accounted for by the system.
+	* If your method *is called by a hook* (that is, vanilla code was called by someone else), calling `base.Method()` is identical to calling `orig(self)` in a traditional BIE hook.
+	* **The result of this behavior is that no matter where or when your method is called, it *always* behaves like you would expect a typical method call to behave, all while preserving compatibility with other mods.**
+		* In general, this means that you should not worry about how hooks will behave. All of the complex behavior and what-ifs are handled by the system.
+* Properties are mirrored just like methods, with the proxy/hook behavior being added to their getter and/or setter independently.
+	* Properties are bound via `Hook`, thus they too will be compatible with any mods that use RuntimeDetour to hook into properties.
 
 # Example implementation
+
+To use it, make a new class that extends the extensible counterpart (i.e. `class MyCoolCustomPlayer : Extensible.Player`). Override any methods or properties that you wish to replace here.
 
 In Rain World, this is what a hypothetical setup might look like:
 
 **Class:** `MyPlayer.cs`
 ```cs
-public class MyPlayer : Extensible.Player {
+// In general, it is strongly recommended (but not actively enforced) that you make your extensible type sealed.
+// When the Binder searches for methods to automatically hook, it looks for *explicitly declared* members. 
+// This means that if you make an abstract extensible class, inherited virtual members **WILL NOT BE AUTOMATICALLY BOUND** 
+// unless you override them and call the base method from the override.
+public sealed class MyPlayer : Extensible.Player {
 
 	private bool _gotPermissionToDie = false;
 
@@ -49,7 +58,7 @@ public class MyPlayer : Extensible.Player {
 		// Original property (which all mirrors use) is set *before* your constructor executes.
 
 		// You MUST declare a constructor like this to use its corresponding bind method! If this constructor was missing, and Bind(player, abstractCreature, world)
-		// got called, the Binder would raise an exception because this constructor was missing.
+		// got called, the Binder would raise an exception reporting that this constructor was missing, thus meaning the bind method is not available.
 	}
 
 	// Call this from the mod's Awake()/OnEnable()
@@ -60,10 +69,19 @@ public class MyPlayer : Extensible.Player {
 				Binder<MyPlayer>.Bind(@this, abstractCreature, world); // This is where the magic happens.
 				// Notice that the bind method matches the signature of the constructor hook. There is also a default variant of Bind (that only takes @this)
 				// You shouldn't do any object initialization here, do that in your constructor instead.
+
+				// Another note is that I only Bind to a class that I know is mine. This makes it more convenient to write code as I can skip out
+				// on verifying that the hook is running on my class or on another. Of course, you should always try to invoke base behavior whenever
+				// possible, lest you cause incompatibilities between mods.
+
+				// NOTE: Only one binding can be made at a time for a specific instance of player. Multiple (different) players can be bound at once, but
+				// the same (singular) player cannot. Attempting to do so will raise an exception.
 			}
 		};
 		On.Player.Destroy += (originalMethod, @this) => {
-			bool unbound = Binder<MyPlayer>.TryReleaseCurrentBinding(@this);
+			Binder<MyPlayer>.TryReleaseCurrentBinding(@this); // This can be used to manually dispose of a binding.
+			// Most importantly, THIS IS *NOT* REQUIRED, but is recommended when possible.
+			// By default, the Binder will free objects alongside garbage collection of the original type (@this), which works but has no guarantees.
 		};
 	}
 	
@@ -77,8 +95,12 @@ public class MyPlayer : Extensible.Player {
 
 # Limitations
 - Extensibles cannot detect construction of original counterparts for automatic binding. 
-  - Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
+	- Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
 - Extensibles cannot extend finalizers (but it *can* extend a `Dispose` method, if present).
-  - Extensibles does not extend constructors either, but a unique `Bind` method is generated for each original constructor, allowing you to *mimic* original constructors instead.
+	- Extensibles does not extend constructors either, but a unique `Bind` method is generated for each constructor, allowing you to *mimic* original constructors instead.
+	- Again, the extensible constructor *has no logic*. This is why you must hook into the original constructor and explicitly call the `Bind` method.
 - Extensibles does not override methods with generic type parameters.
-  - This could probably be done later on, but for now, BIE doesn't do it so I won't either.
+	- This could probably be done later on, but for now, BIE doesn't do it so I won't either.
+
+# Generating for other games
+- Look at the ExtensiblesBIELoader class. It is written for Rain World right now, which notably has delegates to prevent extending `ExtEnum<T>` (a deep enum type for Rain World). You should use these delegates where possible. They exist for types, fields, properties, and methods.
