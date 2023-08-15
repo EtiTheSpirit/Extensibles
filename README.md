@@ -1,6 +1,12 @@
 # Extensibles, The BepInEx Hook Extension Library
 
-### Note: This is still a TEST. Please see the bottom of this document for more information and limitations.
+## Preliminary Warning
+
+Extensibles is in a *testing phase*. It has not been widely tested outside of relatively niche scenarios and *may have unexpected behavior.* Until more extensive testing is done, **use Extensibles at your own risk.** There might be some nasty bugs that I simply didn't or couldn't foresee that brick compatibility with other mods or cause otherwise unpredictable errors.
+
+In general, **it is NOT recommended to use this for production mods at this time. Play with it and see if it works for you instead.**
+
+## Introduction
 
 HookGenExtender, or "Extensibles", is an experimental productivity toolkit designed to layer on top of BepInEx's built-in Hooks library. It is closely inspired by the underlying behavior of Sponge's [Mixin](https://github.com/SpongePowered/Mixin) for *Minecraft*. The behavior of Mixins requires hook classes to be instances (rather than static, like BIE hooks), and just before startup, the bytecode of a modder's mixin class is merged in with that of the class they are modding. The result is that the mixin class gets melded into the original class, and thus it gets to behave as if it is an instance of the class it is injecting into; for all intents and purposes, it *is* that class.
 
@@ -76,9 +82,3 @@ public class MyPlayer : Extensible.Player {
   - Extensibles does not extend constructors either, but a unique `Bind` method is generated for each original constructor, allowing you to *mimic* original constructors instead.
 - Extensibles does not override methods with generic type parameters.
   - This could probably be done later on, but for now, BIE doesn't do it so I won't either.
-
-# Warnings
-
-Extensibles is in a *testing phase*. It has not been widely tested outside of relatively niche scenarios and *may have unexpected behavior.* Until more extensive testing is done, **use Extensibles at your own risk.** There might be some nasty bugs that I simply didn't foresee.
-
-In general, **it is NOT recommended to use this for production mods at this time.**
