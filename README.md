@@ -31,6 +31,7 @@ Each class contains "mirrored" members that follow these rules:
 		* In general, this means that you should not worry about how hooks will behave. All of the complex behavior and what-ifs are handled by the system.
 * Properties are mirrored just like methods, with the proxy/hook behavior being added to their getter and/or setter independently.
 	* Properties are bound via `Hook`, thus they too will be compatible with any mods that use RuntimeDetour to hook into properties.
+* Implicit casts to all vanilla base types are included.
 
 # Example implementation
 
@@ -93,14 +94,23 @@ public sealed class MyPlayer : Extensible.Player {
 }
 ```
 
+# Why?
+At its core, Extensibles *is* just a comically thick boilerplate. The leverage it has over stock hooks varies wildly across games, but in general...
+* Extensibles makes working with discrete objects feel more natural, as access (via hooks) is no longer static.
+	* This might benefit newer modders especially.
+	* This can also help code cleanlines, especially in games like Rain World that have cluttered types.
+	* This might be more familiar to modders coming from other games, especially Minecraft due to its similarities with Mixin.
+* Extensibles allows automatically hooking properties with this technique (though doing this normally *is* just one line of code).
+
+Overall, the only reason you should choose to use this over any other solution comes down to preference. If the presence of one more dependency and some boilerplate is worth it for convenience, then enjoy, otherwise carry on with your work like normal and pay no mind to this toolkit.
+
 # Limitations
+- **Extensibles is NOT thread safe, and only operates predictably in a single-threaded environment.**
+	- This may be changed in the future, but no promises.
 - Extensibles cannot detect construction of original counterparts for automatic binding. 
 	- Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
 - Extensibles cannot extend finalizers (but it *can* extend a `Dispose` method, if present).
 	- Extensibles does not extend constructors either, but a unique `Bind` method is generated for each constructor, allowing you to *mimic* original constructors instead.
-	- Again, the extensible constructor *has no logic*. This is why you must hook into the original constructor and explicitly call the `Bind` method.
+	- Again, the base extensible constructor *has no logic*. This is why you must hook into the original constructor (in the `Initialize` method, as seen in the example) and explicitly call the `Bind` method, and is also why you should not be manually invoking constructors.
 - Extensibles does not override methods with generic type parameters.
 	- This could probably be done later on, but for now, BIE doesn't do it so I won't either.
-
-# Generating for other games
-- Look at the ExtensiblesBIELoader class. It is written for Rain World right now, which notably has delegates to prevent extending `ExtEnum<T>` (a deep enum type for Rain World). You should use these delegates where possible. They exist for types, fields, properties, and methods.
