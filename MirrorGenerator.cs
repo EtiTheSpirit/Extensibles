@@ -54,7 +54,7 @@ namespace HookGenExtender {
 		/// <summary>
 		/// The version of the current Extensibles module. This is used by the generator to determine if the existing DLL in the BepInEx folder is outdated.
 		/// </summary>
-		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 7, 0, 0);
+		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(1, 7, 10, 0);
 
 		/// <summary>
 		/// A cached lookup to <c>WeakReference&lt;&gt;</c>
@@ -431,12 +431,16 @@ namespace HookGenExtender {
 			BindMethodMirrors(original, from, replacement, binderType, strongRef, tExtendsExtensible, createHooks);
 			BindFieldMirrors(original, replacement, strongRef);
 			BindPropertyMirrors(original, from, replacement, strongRef, binderType, createHooks, tExtendsExtensible);
+			ITypeDefOrRef unityDebug = MirrorModule.Import(typeof(UnityEngine.Debug));
+			MemberRefUser log = new MemberRefUser(MirrorModule, "Log", MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, MirrorModule.CorLibTypes.Object), unityDebug);
 
 			// Now we have to close the hooks body, by calling the supertype's method
 			if (!replacement.BaseType.ToTypeSig().IsCorLibType) {
 				TypeDefUser superBinder = mirrorLookup[_originalDefs[replacement.BaseType as TypeDefUser]].Item2;
 				GenericInstSig superBinderInstance = new GenericInstSig(superBinder.ToTypeSig().ToClassOrValueTypeSig(), new GenericVar(0));
 				MemberRef superCreateHooks = createHooks.MakeMemberReference(this, superBinderInstance.ToTypeDefOrRef(), false);
+				createHooks.Body.Instructions.Add(OpCodes.Ldstr.ToInstruction($"[EXTENSIBLES // {replacement.FullName} Binder] Calling parent Binder (in {replacement.BaseType.FullName})..."));
+				createHooks.Body.Instructions.Add(OpCodes.Call.ToInstruction(log));
 				createHooks.Body.Instructions.Add(OpCodes.Ldarg_0.ToInstruction());
 				createHooks.Body.Instructions.Add(OpCodes.Ldarg_1.ToInstruction());
 				createHooks.Body.Instructions.Add(OpCodes.Call.ToInstruction(superCreateHooks));
@@ -444,6 +448,8 @@ namespace HookGenExtender {
 
 			// Now close the binder class's static constructor
 			// ILGenerators.CloseInstancesConstructor(this, replacement, binder);
+			createHooks.Body.Instructions.Add(OpCodes.Ldstr.ToInstruction($"[EXTENSIBLES // {replacement.FullName} Binder] Binding task complete."));
+			createHooks.Body.Instructions.Add(OpCodes.Call.ToInstruction(log));
 			createHooks.Body.Instructions.Add(OpCodes.Ret.ToInstruction());
 
 			// To fix up the brtrue/brfalse jumps that were not marked short due to being uncertain.
@@ -483,11 +489,11 @@ namespace HookGenExtender {
 			while (true) {
 				TypeSig currentSig = cache.Import(currentTypeDef).ToTypeSig();
 				MethodDefUser castImp = new MethodDefUser("op_Implicit", MethodSig.CreateStatic(currentSig, to.ToTypeSig()), MethodAttributes.Static | MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
-				MethodDefUser castExp = new MethodDefUser("op_Explicit", MethodSig.CreateStatic(to.ToTypeSig(), currentSig), MethodAttributes.Static | MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
+				//MethodDefUser castExp = new MethodDefUser("op_Explicit", MethodSig.CreateStatic(to.ToTypeSig(), currentSig), MethodAttributes.Static | MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
 				ILGenerators.CreateImplicitCastToOriginal(this, to, strongRef, castImp);
-				ILGenerators.CreateExplicitCastFromOriginal(this, originalTypeDef, to, strongRef, castExp);
+				//ILGenerators.CreateExplicitCastFromOriginal(this, originalTypeDef, to, strongRef, castExp);
 				to.Methods.Add(castImp);
-				to.Methods.Add(castExp);
+				//to.Methods.Add(castExp);
 
 				if (currentTypeDef.BaseType.ToTypeSig() is CorLibTypeSig) break;
 				if (currentTypeDef.BaseType is not TypeDef) break;
@@ -510,22 +516,31 @@ namespace HookGenExtender {
 			ITypeDefOrRef hashSet = cache.Import(typeof(HashSet<>));
 			GenericInstSig stringHashSetSig = new GenericInstSig(hashSet.ToTypeSig().ToClassOrValueTypeSig(), MirrorModule.CorLibTypes.String);
 
-			MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, new GenericVar(0), stringHashSetSig);
+			//MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, new GenericVar(0), stringHashSetSig);
+			CommonMembers.PrepareCachedSystemReflectionStuffs(this);
+			MethodSig createHooksSig = MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void, CommonMembers.typeTypeSig, stringHashSetSig);
 			MethodDefUser createHooks = new MethodDefUser("<Binder>CreateHooks", createHooksSig, PRIVATE_METHOD_TYPE | MethodAttributes.Static | MethodAttributes.SpecialName);
-			createHooks.SetParameterName(0, "extensibleInstance");
+			createHooks.SetParameterName(0, "extensibleInstanceType");
 			createHooks.SetParameterName(1, "skipBindingToMethods");
 			createHooks.Body = new CilBody();
 
+			GenericVar tExtendsExtensible = new GenericVar(0, binder);
+			GenericInstSig binderInstance = new GenericInstSig(binder.ToTypeSig().ToClassOrValueTypeSig(), tExtendsExtensible);
+			ITypeDefOrRef binderInstanceRef = binderInstance.ToTypeDefOrRef();
+			ITypeDefOrRef genericInstanceRef = tExtendsExtensible.ToTypeDefOrRef();
+
 			FieldDefUser hasCreatedHooks = new FieldDefUser("_hasCreatedHooks", new FieldSig(MirrorModule.CorLibTypes.Boolean), PRIVATE_FIELD_TYPE | FieldAttributes.Static);
 
-			GenericVar tExtendsExtensible = new GenericVar(0, binder);
+			MethodDefUser initialize = new MethodDefUser("Initialize", MethodSig.CreateStatic(MirrorModule.CorLibTypes.Void), MethodAttributes.Static | MethodAttributes.Public);
+			MemberRef hasCreatedHooksInstance = hasCreatedHooks.MakeMemberReference(this, binderInstanceRef, false);
+			initialize.Body = ILGenerators.CreateInitializeMethodBody(this, genericInstanceRef, createHooks.MakeMemberReference(this, binderInstanceRef, false), hasCreatedHooksInstance);
+
+
 			TypeSig sourceType = source.ToTypeSig();
 
 			GenericInstSig instancesCWT = new GenericInstSig(CWTTypeSig, sourceType, tExtendsExtensible);
 			FieldDefUser instancesCache = new FieldDefUser("_instances", new FieldSig(instancesCWT), PRIVATE_FIELD_TYPE | FieldAttributes.Static);
 			binder.Fields.Add(instancesCache);
-
-			GenericInstSig binderInstance = new GenericInstSig(binder.ToTypeSig().ToClassOrValueTypeSig(), tExtendsExtensible);
 
 			ILGenerators.GenerateInstancesConstructor(this, extensible, binder, binderInstance, instancesCWT);
 			(MethodDefUser[] binds, MethodDefUser destroy, FieldDefUser ctorCache, MethodDefUser tryGetBoundInstance) = ILGenerators.GenerateBinderBindAndDestroyMethods(this, sourceDef, extensible, binder, binderInstance, sourceType, instancesCWT, hasCreatedHooks, createHooks);
@@ -534,8 +549,9 @@ namespace HookGenExtender {
 			}
 			binder.Fields.Add(ctorCache);
 			binder.Fields.Add(hasCreatedHooks);
-			binder.Methods.Add(destroy);
+			binder.Methods.Add(initialize);
 			binder.Methods.Add(createHooks);
+			binder.Methods.Add(destroy);
 			binder.Methods.Add(tryGetBoundInstance);
 			
 			// REMEMBER: The function generator (where it ports the methods into the extensible type) is responsible for adding the four instructions

@@ -10,8 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace HookGenExtender.Utilities {
-	public static class Hooks {
-
+	public static class ILUtilities {
 		
 		/// <summary>
 		/// For use in ldarg, which (for some reason) wants this.
@@ -101,6 +100,16 @@ namespace HookGenExtender.Utilities {
 		public static ParamDef GetOrCreateParamDef(this Parameter param) {
 			param.CreateParamDef();
 			return param.ParamDef;
+		}
+
+		/// <summary>
+		/// Uses stloc and then immediately follows it with ldloc.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="local"></param>
+		public static void StoreThenLoad(this CilBody body, Local local) {
+			body.Instructions.Add(OpCodes.Stloc.ToInstruction(local));
+			body.Instructions.Add(OpCodes.Ldloc.ToInstruction(local));
 		}
 	}
 }

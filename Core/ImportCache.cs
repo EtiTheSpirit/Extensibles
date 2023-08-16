@@ -1,4 +1,5 @@
 ﻿using dnlib.DotNet;
+using HookGenExtender.Core.Utils.Ext;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace HookGenExtender.Utilities {
+namespace HookGenExtender.Core {
 	public sealed class ImportCache : IDisposable {
 
 		private readonly Dictionary<Type, ITypeDefOrRef> _typeImports = new Dictionary<Type, ITypeDefOrRef>();
@@ -46,6 +47,11 @@ namespace HookGenExtender.Utilities {
 		public MemberRef Import(MethodDef type) => _mtdDefImports.GetOrCreate(type, _module.Import);
 		public MethodSpec Import(MethodSpec type) => _mtdSpecImports.GetOrCreate(type, _module.Import);
 		public MemberRef Import(MemberRef type) => _mbrRefImports.GetOrCreate(type, _module.Import);
+
+		public void ImportForReferenceAndSignature(Type type, out ITypeDefOrRef reference, out TypeSig signature) {
+			reference = Import(type);
+			signature = ImportAsTypeSig(type);
+		}
 
 		public void Dispose() {
 			_typeImports.Clear();

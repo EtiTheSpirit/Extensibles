@@ -1,14 +1,17 @@
 ﻿using dnlib.DotNet;
-using dnlib.DotNet.Emit;
-using HookGenExtender.Utilities.Representations;
+using HookGenExtender.Core.DataStorage;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace HookGenExtender.Utilities {
-	public static class BepInExExtensibles {
+namespace HookGenExtender.Core.ReferenceHelpers {
+
+	/// <summary>
+	/// Tools to assist in finding references to BepInEx hook stuffs.
+	/// </summary>
+	public static class BepInExTools {
 
 		/// <summary>
 		/// Returns whether or not the provided <paramref name="type"/> has an equivalent <c>On.</c> counterpart in BIE's Hooks module.
@@ -16,7 +19,7 @@ namespace HookGenExtender.Utilities {
 		/// <param name="mirrorGenerator"></param>
 		/// <param name="type"></param>
 		/// <returns></returns>
-		public static bool HasBIEOnClass(this TypeDef type, MirrorGenerator mirrorGenerator) {
+		public static bool HasBIEHookClass(this TypeDef type, ExtensiblesGenerator mirrorGenerator) {
 			string fullName = type.ReflectionFullName;
 			string hookFullName = "On." + fullName;
 			return mirrorGenerator.BepInExHooksModule.Find(hookFullName, true) != null;
@@ -29,30 +32,30 @@ namespace HookGenExtender.Utilities {
 		/// <param name="original">The method that should be hooked.</param>
 		/// <param name="hook">Information about the BIE hook.</param>
 		/// <returns>True if a hook exists, false if not.</returns>
-		public static bool TryGetBIEHook(MirrorGenerator mirrorGenerator, MethodDef original, out BIEHookRef hook) {
+		public static bool TryGetBIEHook(ExtensiblesGenerator main, MethodDef original, out BIEHookRef hook) {
 			// Start by declaring the field storing the original delegate.
 			// To do this, acquire the hook type and the corresponding delegate.
 			string fullName = original.DeclaringType.ReflectionFullName;
 			string hookFullName = "On." + fullName;
-			TypeDef hookClassDef = mirrorGenerator.BepInExHooksModule.Find(hookFullName, true);
+			TypeDef hookClassDef = main.BepInExHooksModule.Find(hookFullName, true);
 			if (hookClassDef == null) {
 				hook = default;
 				return false;
 			}
-			if (!hookClassDef.TryGetOrigDelegateForMethod(original, out TypeDef bieOrigMethodDef, out MethodDef bieOrigInvoke, out EventDef hookEvt)) {
+			if (!hookClassDef.TryGetOrigDelegateForMethod(main, original, out TypeDef bieOrigMethodDef, out MethodDef bieOrigInvoke, out EventDef hookEvt)) {
 				hook = default;
 				return false;
 			}
-			TypeRef hookClassRef = mirrorGenerator.cache.Import(hookClassDef);
-			TypeRef bieOrigMethod = mirrorGenerator.cache.Import(bieOrigMethodDef);
-			TypeSig bieOrigMethodSig = mirrorGenerator.cache.Import(bieOrigMethodDef.ToTypeSig());
-			IMethodDefOrRef bieOrigInvokeRef = mirrorGenerator.cache.Import(bieOrigInvoke);
+			TypeRef hookClassRef = main.Cache.Import(hookClassDef);
+			TypeRef bieOrigMethod = main.Cache.Import(bieOrigMethodDef);
+			TypeSig bieOrigMethodSig = main.Cache.Import(bieOrigMethodDef.ToTypeSig());
+			IMethodDefOrRef bieOrigInvokeRef = main.Cache.Import(bieOrigInvoke);
 
-			TypeSig[] invokeParameters = bieOrigInvoke!.Parameters.Select(paramDef => mirrorGenerator.cache.Import(paramDef.Type)).ToArray();
+			TypeSig[] invokeParameters = bieOrigInvoke!.Parameters.Select(paramDef => main.Cache.Import(paramDef.Type)).ToArray();
 			TypeSig[] originalMethodParameters = original.Parameters
 				.Skip(1) // skip 'this'
 				.Where(paramDef => !paramDef.IsReturnTypeParameter)
-				.Select(paramDef => mirrorGenerator.cache.Import(paramDef.Type))
+				.Select(paramDef => main.Cache.Import(paramDef.Type))
 				.ToArray();
 
 			hook = new BIEHookRef(hookClassRef, bieOrigMethod, bieOrigMethodSig, bieOrigInvokeRef, hookEvt, invokeParameters, originalMethodParameters);
@@ -65,7 +68,7 @@ namespace HookGenExtender.Utilities {
 		/// <param name="hookType"></param>
 		/// <param name="originalMethod"></param>
 		/// <returns></returns>
-		public static bool TryGetOrigDelegateForMethod(this TypeDef hookType, MethodDef originalMethod, out TypeDef bieOrigMethodDef, out MethodDef bieOrigInvoke, out EventDef hookEvt) {
+		public static bool TryGetOrigDelegateForMethod(this TypeDef hookType, ExtensiblesGenerator mirrorGenerator, MethodDef originalMethod, out TypeDef bieOrigMethodDef, out MethodDef bieOrigInvoke, out EventDef hookEvt) {
 			// BIE hooks follow 3 simple rules:
 			// If the method is singular (no overloads), the name is orig_MethodName
 			// If the method has overloads, the name is orig_MethodName_Types_Types_Types (where Types are the human readable names i.e. int not Int32)
@@ -93,7 +96,6 @@ namespace HookGenExtender.Utilities {
 
 			// Match by parameters
 			// This is yucky lol
-#if DEBUG_HELPER_ENABLED
 			TypeSig[] originalTypes = originalMethod.Parameters.Select(param => param.Type).ToArray();
 			type = types.FirstOrDefault(type => {
 				TypeSig[] otherTypes = type.GetParametersOfDelegate().Select(param => param.Type).Skip(1).ToArray();
@@ -106,10 +108,7 @@ namespace HookGenExtender.Utilities {
 				}
 				return true;
 			});
-#else
-			TypeSig[] originalTypes = originalMethod.Parameters.Select(param => param.Type).ToArray();
-			type = types.FirstOrDefault(type => type.GetParametersOfDelegate().Skip(1).Select(param => param.Type).SequenceEqual(originalTypes));
-#endif
+
 			if (type != null) {
 				evt = hookType.FindEvent(type.Name.Substring(5));
 			}
