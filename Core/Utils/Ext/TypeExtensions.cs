@@ -15,7 +15,7 @@ namespace HookGenExtender.Core.Utils.Ext {
 		/// </summary>
 		/// <param name="parameters"></param>
 		/// <returns></returns>
-		public static GenericInstanceTypeDef MakeGenericType(this ITypeDefOrRef tdor, params NamedTypeSig[] parameters) {
+		public static GenericInstanceTypeDef MakeGenericType(this ITypeDefOrRef tdor, params TypeSig[] parameters) {
 			if (tdor == null) throw new NullReferenceException();
 			return new GenericInstanceTypeDef(tdor, parameters);
 		}
@@ -25,7 +25,7 @@ namespace HookGenExtender.Core.Utils.Ext {
 		/// </summary>
 		/// <param name="parameters"></param>
 		/// <returns></returns>
-		public static GenericInstanceTypeDef MakeGenericType(this IHasTypeDefOrRef tdor, params NamedTypeSig[] parameters) {
+		public static GenericInstanceTypeDef MakeGenericType(this IHasTypeDefOrRef tdor, params TypeSig[] parameters) {
 			if (tdor == null) throw new NullReferenceException();
 			return new GenericInstanceTypeDef(tdor.Reference, parameters);
 		}
@@ -33,11 +33,13 @@ namespace HookGenExtender.Core.Utils.Ext {
 		/// <summary>
 		/// Returns whether or not the type is compiler generated (via being decorated with <see cref="System.Runtime.CompilerServices.CompilerGeneratedAttribute"/>)
 		/// </summary>
-		/// <param name="type"></param>
+		/// <param name="hasCustomAttribute"></param>
 		/// <returns></returns>
-		public static bool IsCompilerGenerated(this TypeDef type) {
-			return type.CustomAttributes.FirstOrDefault(attr => attr.TypeFullName == "System.Runtime.CompilerServices.CompilerGeneratedAttribute") != null;
+		public static bool IsCompilerGenerated(this IHasCustomAttribute hasCustomAttribute) {
+			return hasCustomAttribute.CustomAttributes.FirstOrDefault(attr => attr.TypeFullName == "System.Runtime.CompilerServices.CompilerGeneratedAttribute") != null;
 		}
+
+		
 
 		/// <summary>
 		/// Returns whether or not a property is static.

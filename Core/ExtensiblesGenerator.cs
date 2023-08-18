@@ -1,6 +1,7 @@
 ﻿using dnlib.DotNet;
 using dnlib.DotNet.Pdb;
 using HookGenExtender.Core.DataStorage;
+using HookGenExtender.Core.DataStorage.BulkMemberStorage;
 using HookGenExtender.Core.ILGeneration;
 using HookGenExtender.Core.ReferenceHelpers;
 using HookGenExtender.Core.Utils.Ext;
@@ -140,9 +141,6 @@ namespace HookGenExtender.Core {
 				if (def.IsStatic()) continue;
 				//if (def.Name.StartsWith("<")) continue; // TODO: Better version of this.
 				if (def.IsCompilerGenerated()) continue;
-#if DEBUG
-				if (def.Name.StartsWith("<")) Debugger.Break(); // This should not happen.
-#endif
 				if (def.Namespace.StartsWith("Microsoft.CodeAnalysis")) continue;
 				if (def.Namespace.StartsWith("System.")) continue;
 				if (!def.HasBIEHookClass(this)) continue;
@@ -245,7 +243,51 @@ namespace HookGenExtender.Core {
 		}
 
 		private void MakeExtensibleTypeProcedure(ExtensibleTypeData of) {
-			MemberTemplates.MakeExtensibleCoreMembers(this, of);
+			ExtensibleCoreMembers coreMembers = MemberTemplates.MakeExtensibleCoreMembers(this, of);
+			ExtensibleBinderCoreMembers binderMembers = MemberTemplates.MakeBinderCoreMembers(this, of);
+
+			BindFieldMirrors(of, in coreMembers);
+		}
+
+
+
+		private void BindFieldMirrors(ExtensibleTypeData extensible, in ExtensibleCoreMembers coreMembers) {
+			foreach (FieldDef field in extensible._originalGameType.Fields) {
+				if (field.IsStatic) continue;
+				if (field.IsSpecialName || field.IsRuntimeSpecialName) continue;
+				if (field.IsCompilerGenerated()) continue;
+				if (!IsFieldAllowedCallback(field)) continue;
+
+				PropertyDefAndRef prop = MemberTemplates.MakeExtensibleFieldProxy(this, in coreMembers, extensible, new FieldDefAndRef(Extensibles, field, extensible.ImportedGameType));
+				extensible.ExtensibleType.AddProperty(prop);
+			}
+		}
+
+		private void BindPropertyMirrors(ExtensibleTypeData extensible, in ExtensibleCoreMembers coreMembers, in ExtensibleBinderCoreMembers binderMembers) {
+			foreach (PropertyDef property in extensible._originalGameType.Properties) {
+				if (property.IsStatic()) continue;
+				if (property.IsCompilerGenerated()) continue;
+				if (!IsPropertyAllowedCallback(property)) continue;
+
+			}
+		}
+
+		private void BindMethodMirrors(ExtensibleTypeData extensible, in ExtensibleCoreMembers coreMembers, in ExtensibleBinderCoreMembers binderMembers) {
+			foreach (MethodDef method in extensible._originalGameType.Methods) {
+				if (method.IsStatic) continue;
+				if (method.IsSpecialName || method.IsRuntimeSpecialName) continue; // properties do this.
+				if (method.HasGenericParameters) continue;
+				if (method.IsConstructor || method.IsStaticConstructor || method.Name == "Finalize") continue;
+				if (method.IsCompilerGenerated()) continue;
+				if (!IsMethodAllowedCallback(method)) continue;
+
+
+				if (BepInExTools.TryGetBIEHook(this, extensible, method, out BepInExHookRef hookInfo)) {
+					ProxyAndHookPackage proxyAndHook = MemberTemplates.MakeExtensibleMethodProxy(this, in coreMembers, in hookInfo);
+					
+				}
+			}
+
 		}
 
 		#region Utilities

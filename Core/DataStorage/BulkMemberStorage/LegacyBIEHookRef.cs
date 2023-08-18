@@ -10,7 +10,7 @@ namespace HookGenExtender.Core.DataStorage.BulkMemberStorage {
 	/// <summary>
 	/// A container representing all data in a BepInEx <c>On.</c> hook.
 	/// </summary>
-	public readonly struct BIEHookRef {
+	public readonly struct LegacyBIEHookRef {
 
 		/// <summary>
 		/// The actual type containing the hook, like <c>On.Player</c>
@@ -48,7 +48,7 @@ namespace HookGenExtender.Core.DataStorage.BulkMemberStorage {
 		/// </summary>
 		public readonly TypeSig[] methodParameters;
 
-		public BIEHookRef(TypeRef hookContainerType, TypeRef delegateType, TypeSig delegateSig, IMethodDefOrRef invoke, EventDef hook, TypeSig[] invokeParameters, TypeSig[] methodParameters) {
+		public LegacyBIEHookRef(TypeRef hookContainerType, TypeRef delegateType, TypeSig delegateSig, IMethodDefOrRef invoke, EventDef hook, TypeSig[] invokeParameters, TypeSig[] methodParameters) {
 			this.hookContainerType = hookContainerType;
 			this.delegateType = delegateType;
 			this.delegateSig = delegateSig;

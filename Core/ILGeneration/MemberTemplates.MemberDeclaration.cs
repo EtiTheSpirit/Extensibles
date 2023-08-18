@@ -12,6 +12,8 @@ using Void = HookGenExtender.Core.DataStorage.ExtremelySpecific.Void;
 namespace HookGenExtender.Core.ILGeneration {
 	public static partial class MemberTemplates {
 
+		#region Extensible Type Constructor
+
 		/// <summary>
 		/// Creates a constructor with the provided attributes and parameters.
 		/// </summary>
@@ -38,6 +40,10 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="parameters"></param>
 		/// <returns></returns>
 		public static MethodDefAndRef CreateConstructor(ExtensiblesGenerator main, CachedTypeDef onType, params NamedTypeSig[] parameters) => CreateConstructor(main, onType, MethodAttributes.Public, parameters);
+
+		#endregion
+
+		#region Core Member Declarations
 
 		/// <summary>
 		/// Creates all members that are core to an extensible type (and thus common between them all), and populates their code.
@@ -83,19 +89,26 @@ namespace HookGenExtender.Core.ILGeneration {
 			FieldDefAndRef hasCreatedBindingsField = new FieldDefAndRef(main.Extensibles, "<Binder>hasCreatedBindings", new FieldSig(main.CorLibTypeSig<bool>()), @in.Binder.Reference, CommonAttributes.SPECIAL_LOCKED_STATIC_FIELD);
 			@in.Binder.AddField(hasCreatedBindingsField);
 			
-			MethodDefAndRef createBindingsMethod = new MethodDefAndRef(main.Extensibles, "<Binder>CreateBindings", MethodSig.CreateStatic(main.CorLibTypeSig<Void>(), main.Shared.TypeSig, main.Shared.HashSetStringInstanceSig), @in.Binder.Reference, CommonAttributes.SPECIAL_LOCKED_METHOD);
+			MethodDefAndRef createBindingsMethod = new MethodDefAndRef(main.Extensibles, "<Binder>CreateBindings", MethodSig.CreateStatic(main.CorLibTypeSig<Void>(), main.Shared.HashSetStringInstanceSig), @in.Binder.Reference, CommonAttributes.SPECIAL_LOCKED_METHOD);
+			createBindingsMethod.Definition.SetParameterName(0, "excludeMethods");
 			@in.Binder.AddMethod(createBindingsMethod);
 
 			MethodDefAndRef tryReleaseBindingMethod = new MethodDefAndRef(main.Extensibles, "TryReleaseBinding", MethodSig.CreateStatic(main.CorLibTypeSig<bool>(), @in.ImportedGameTypeSig), @in.Binder.Reference, MethodAttributes.Public);
+			tryReleaseBindingMethod.Definition.SetParameterName(0, "fromInstance");
 			@in.Binder.AddMethod(tryReleaseBindingMethod);
 
 			MethodDefAndRef tryGetBindingMethod = new MethodDefAndRef(main.Extensibles, "TryGetBinding", MethodSig.CreateStatic(main.CorLibTypeSig<bool>(), @in.ImportedGameTypeSig, new ByRefSig(@in.ExtensibleType.Signature)), @in.Binder.Reference, MethodAttributes.Public);
+			tryGetBindingMethod.Definition.Parameters[1].GetOrCreateParamDef().IsOut = true;
+			tryGetBindingMethod.Definition.SetParameterName(0, "toInstance");
+			tryGetBindingMethod.Definition.SetParameterName(1, "binding");
 			@in.Binder.AddMethod(tryGetBindingMethod);
 
 			ExtensibleBinderCoreMembers mbrs = new ExtensibleBinderCoreMembers(@in, bindingsField, hasCreatedBindingsField, createBindingsMethod, tryGetBindingMethod, tryReleaseBindingMethod, bindingsFieldType);
 			CodeBinderCoreMembers(main, mbrs);
 			return mbrs;
 		}
+
+		#endregion
 
 	}
 }

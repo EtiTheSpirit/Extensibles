@@ -1,7 +1,13 @@
 ﻿using dnlib.DotNet;
 using HookGenExtender.Core.DataStorage;
+using HookGenExtender.Core.DataStorage.BulkMemberStorage;
+using HookGenExtender.Core.DataStorage.ExtremelySpecific.DelegateStuff;
+using HookGenExtender.Core.ILGeneration;
+using HookGenExtender.Core.Utils.MemberMutation;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -28,47 +34,38 @@ namespace HookGenExtender.Core.ReferenceHelpers {
 		/// <summary>
 		/// Attempts to find a BepInEx <c>On.</c> hook for the provided method.
 		/// </summary>
-		/// <param name="mirrorGenerator">The mirror generator, for importing types.</param>
+		/// <param name="main">The extensibles generator, for importing types.</param>
+		/// <param name="gameType">The extensible type that the hook pertains to.</param>
 		/// <param name="original">The method that should be hooked.</param>
-		/// <param name="hook">Information about the BIE hook.</param>
+		/// <param name="del">Delegate information and references to all members of the delegates.</param>
 		/// <returns>True if a hook exists, false if not.</returns>
-		public static bool TryGetBIEHook(ExtensiblesGenerator main, MethodDef original, out BIEHookRef hook) {
+		public static bool TryGetBIEHook(ExtensiblesGenerator main, ExtensibleTypeData gameType, MethodDef original, out BepInExHookRef del) {
 			// Start by declaring the field storing the original delegate.
 			// To do this, acquire the hook type and the corresponding delegate.
 			string fullName = original.DeclaringType.ReflectionFullName;
 			string hookFullName = "On." + fullName;
 			TypeDef hookClassDef = main.BepInExHooksModule.Find(hookFullName, true);
 			if (hookClassDef == null) {
-				hook = default;
+				del = default;
 				return false;
 			}
-			if (!hookClassDef.TryGetOrigDelegateForMethod(main, original, out TypeDef bieOrigMethodDef, out MethodDef bieOrigInvoke, out EventDef hookEvt)) {
-				hook = default;
+			if (!hookClassDef.TryGetOrigDelegateForMethod(main, gameType, original, out del)) {
+				del = default;
 				return false;
 			}
-			TypeRef hookClassRef = main.Cache.Import(hookClassDef);
-			TypeRef bieOrigMethod = main.Cache.Import(bieOrigMethodDef);
-			TypeSig bieOrigMethodSig = main.Cache.Import(bieOrigMethodDef.ToTypeSig());
-			IMethodDefOrRef bieOrigInvokeRef = main.Cache.Import(bieOrigInvoke);
-
-			TypeSig[] invokeParameters = bieOrigInvoke!.Parameters.Select(paramDef => main.Cache.Import(paramDef.Type)).ToArray();
-			TypeSig[] originalMethodParameters = original.Parameters
-				.Skip(1) // skip 'this'
-				.Where(paramDef => !paramDef.IsReturnTypeParameter)
-				.Select(paramDef => main.Cache.Import(paramDef.Type))
-				.ToArray();
-
-			hook = new BIEHookRef(hookClassRef, bieOrigMethod, bieOrigMethodSig, bieOrigInvokeRef, hookEvt, invokeParameters, originalMethodParameters);
 			return true;
 		}
 
 		/// <summary>
 		/// Returns the delegate <c>orig_</c> provided by BepInEx hooks for the provided <paramref name="originalMethod"/>.
+		/// The returned delegate is imported, however the event is not.
 		/// </summary>
 		/// <param name="hookType"></param>
+		/// <param name="main"></param>
+		/// <param name="gameType">The type storing the method that the hook pertains to.</param>
 		/// <param name="originalMethod"></param>
 		/// <returns></returns>
-		public static bool TryGetOrigDelegateForMethod(this TypeDef hookType, ExtensiblesGenerator mirrorGenerator, MethodDef originalMethod, out TypeDef bieOrigMethodDef, out MethodDef bieOrigInvoke, out EventDef hookEvt) {
+		public static bool TryGetOrigDelegateForMethod(this TypeDef hookType, ExtensiblesGenerator main, ExtensibleTypeData gameType, MethodDefAndRef originalMethod, out BepInExHookRef data) {
 			// BIE hooks follow 3 simple rules:
 			// If the method is singular (no overloads), the name is orig_MethodName
 			// If the method has overloads, the name is orig_MethodName_Types_Types_Types (where Types are the human readable names i.e. int not Int32)
@@ -77,54 +74,68 @@ namespace HookGenExtender.Core.ReferenceHelpers {
 			// Thankfully, the name match can be left to the first rule. Rather than trying to jank my way through the names, I'll match parameters instead.
 			string methodName = originalMethod.Name.Replace(".", "_"); // The replacement of . to _ accounts for interface implementations.
 			string origName = $"orig_{methodName}";
-#if DEBUG_HELPER_ENABLED
-			TypeDef[] types = hookType.NestedTypes.Where(type => type.IsDelegate && type.Name.StartsWith(origName)).ToArray();
-#else
+			string hookName = $"hook_{methodName}";
 			IEnumerable<TypeDef> types = hookType.NestedTypes.Where(type => type.IsDelegate && type.Name.StartsWith(origName));
-#endif
 
-			TypeDef type;
-			EventDef evt = null;
+			TypeDef origDelType = null;
+			TypeDef hookDelType = null;
 			if (types.Count() == 1) {
-				type = types.First();
-				evt = hookType.FindEvent(type.Name.Substring(5));
-				bieOrigMethodDef = type;
-				bieOrigInvoke = type.FindMethod("Invoke");
-				hookEvt = evt;
-				return bieOrigInvoke != null && hookEvt != null;
-			}
+				origDelType = types.First();
+				hookDelType = hookType.NestedTypes.First(t => t.Name == hookName);
+			} else {
+				// Need to match by parameters.
+				originalMethod.Definition.SelectParameters(main, out TypeSig[] methodParameters, out _, out _, false);
+				foreach (TypeDef candidateDel in types) {
+					candidateDel.FindMethod("Invoke").SelectParameters(main, out TypeSig[] inputParameters, out TypeSig retnParam, out _, false);
+					IEnumerable<TypeSig> inputParametersAdjusted = inputParameters.Skip(1); // Skips "self".
 
-			// Match by parameters
-			// This is yucky lol
-			TypeSig[] originalTypes = originalMethod.Parameters.Select(param => param.Type).ToArray();
-			type = types.FirstOrDefault(type => {
-				TypeSig[] otherTypes = type.GetParametersOfDelegate().Select(param => param.Type).Skip(1).ToArray();
-				//return otherTypes.SequenceEqual(originalTypes, temp);
-				if (originalTypes.Length != otherTypes.Length) return false;
-				for (int i = 0; i < otherTypes.Length; i++) {
-					TypeSig left = originalTypes[i];
-					TypeSig right = otherTypes[i];
-					if (left.FullName != right.FullName) return false;
+					if (inputParametersAdjusted.SequenceEqual(methodParameters, TypeSignatureComparer.Instance)) {
+						origDelType = candidateDel;
+
+						// Now update the strings too:
+						origName = origDelType.Name;
+						methodName = origName.Substring(5);
+						hookName = "hook_" + methodName;
+
+						// And find this now:
+						hookDelType = hookType.NestedTypes.First(t => t.Name == hookName);
+						break;
+					}
 				}
-				return true;
-			});
-
-			if (type != null) {
-				evt = hookType.FindEvent(type.Name.Substring(5));
+				if (origDelType == null) {
+					Debugger.Break();
+					data = default;
+					return false;
+				}
 			}
 
-			bieOrigMethodDef = type;
-			bieOrigInvoke = type?.FindMethod("Invoke");
-			hookEvt = evt;
-			return type != null && bieOrigInvoke != null && hookEvt != null;
+			EventDef hookEvt = hookType.FindEvent(methodName);
+			if (hookEvt == null) {
+				Debugger.Break();
+				data = default;
+				return false;
+			}
+
+			data = new BepInExHookRef(
+				gameType,
+				originalMethod,
+				ILTools.ReferenceDelegateType(main, origDelType),
+				ILTools.ReferenceDelegateType(main, hookDelType),
+				originalMethod.Definition.MethodSig.CloneAndImport(main),
+				hookEvt,
+				new MethodDefAndRef(main.Extensibles, hookEvt.AddMethod, hookType),
+				new MethodDefAndRef(main.Extensibles, hookEvt.RemoveMethod, hookType)
+			);
+			return true;
 		}
 
-		public static IEnumerable<Parameter> GetParametersOfDelegate(this TypeDef @delegate) {
-			if (!@delegate.IsDelegate) throw new ArgumentException($"The provided type ({@delegate}) is not a delegate type!");
-			MethodDef invokeMtd = @delegate.FindMethod("Invoke");
-			foreach (Parameter param in invokeMtd.Parameters) {
-				yield return param;
-			}
+		private class TypeSignatureComparer : IEqualityComparer<TypeSig> {
+
+			public static IEqualityComparer<TypeSig> Instance { get; } = new TypeSignatureComparer();
+
+			public bool Equals(TypeSig x, TypeSig y) => x.FullName == y.FullName;
+
+			public int GetHashCode(TypeSig obj) => obj.FullName.GetHashCode();
 		}
 
 	}

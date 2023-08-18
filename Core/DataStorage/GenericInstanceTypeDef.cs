@@ -32,6 +32,8 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		public GenericInstSig Signature { get; }
 
+		TypeSig IHasTypeDefOrRef.Signature => Signature;
+
 		/// <summary>
 		/// <see cref="Signature"/> wrapped in a new <see cref="FieldSig"/>.
 		/// </summary>
@@ -64,6 +66,8 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <returns></returns>
 		public MemberRef ReferenceExistingMethod(string name, MethodSig method) {
 			return new MemberRefUser(NonGeneric.Module, name, method, Reference);
+			// TO FUTURE XAN: Can't cache, MethodSig doesn't have an equality operator.
+			// It might not be worth it to do this yourself.
 		}
 
 		/// <summary>
@@ -75,6 +79,5 @@ namespace HookGenExtender.Core.DataStorage {
 		public MemberRef ReferenceExistingField(string name, FieldSig field) {
 			return new MemberRefUser(NonGeneric.Module, name, field, Reference);
 		}
-
 	}
 }

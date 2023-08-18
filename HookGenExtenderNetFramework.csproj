@@ -63,13 +63,20 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Core\DataStorage\BulkMemberStorage\BIEHookRef.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\BepInExHookRef.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\LegacyBIEHookRef.cs" />
     <Compile Include="Core\DataStorage\BulkMemberStorage\ExtensibleBinderCoreMembers.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\ExtensibleMethodProxyMembers.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\ProxyAndHookPackage.cs" />
     <Compile Include="Core\DataStorage\CachedTypeDef.cs" />
     <Compile Include="Core\DataStorage\CommonGenericArgs.cs" />
     <Compile Include="Core\DataStorage\CorLibTypeContainer.cs" />
     <Compile Include="Core\DataStorage\BulkMemberStorage\ExtensibleCoreMembers.cs" />
+    <Compile Include="Core\DataStorage\DefinitionAndReference.cs" />
     <Compile Include="Core\DataStorage\ExtensibleTypeData.cs" />
+    <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\DelegateTypeDefAndRef.cs" />
+    <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\DelegateTypeRef.cs" />
+    <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\IDelegateTypeWrapper.cs" />
     <Compile Include="Core\DataStorage\ExtremelySpecific\InstructionOrString.cs" />
     <Compile Include="Core\DataStorage\ExtremelySpecific\Void.cs" />
     <Compile Include="Core\DataStorage\FieldDefAndRef.cs" />
@@ -85,6 +92,8 @@
     <Compile Include="Core\ILGeneration\ExtendedCILBody.cs" />
     <Compile Include="Core\ILGeneration\ILTools.ObjectRelated.cs" />
     <Compile Include="Core\ILGeneration\ILTools.InstructionRelated.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.BinderHooks.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.ExtensibleProxies.cs" />
     <Compile Include="Core\ILGeneration\MemberTemplates.MemberCoding.cs" />
     <Compile Include="Core\ILGeneration\MemberTemplates.MemberDeclaration.cs" />
     <Compile Include="Core\ReferenceHelpers\BepInExTools.cs" />
@@ -93,6 +102,7 @@
     <Compile Include="Core\Utils\Ext\TypeExtensions.cs" />
     <None Include="HookGenExtenderMain.cs" />
     <None Include="MirrorGenerator.cs" />
+    <Compile Include="Core\Utils\MemberMutation\MethodMutator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <None Include="LEGACY\BinderOwnerHelper.cs" />
     <None Include="LEGACY\Extensions.cs" />

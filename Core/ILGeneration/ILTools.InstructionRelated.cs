@@ -10,6 +10,7 @@ using System.Reflection;
 using HookGenExtender.Core.DataStorage;
 using HookGenExtender.Core.DataStorage.ExtremelySpecific;
 using System.Diagnostics;
+using HookGenExtender.Core.Utils.Ext;
 
 namespace HookGenExtender.Core.ILGeneration {
 
@@ -19,13 +20,13 @@ namespace HookGenExtender.Core.ILGeneration {
 	public static partial class ILTools {
 
 		/// <summary>
-		/// Emits an instruction.
+		/// Emits an instruction via its opcode and an optional operand.
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="opcode"></param>
 		/// <param name="operand"></param>
 		/// <returns></returns>
-		[DebuggerStepThrough]
+		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Instruction Emit(this CilBody body, OpCode opcode, object operand = null) {
 			Instruction instruction = new Instruction(opcode, operand);
 			body.Instructions.Add(instruction);
@@ -33,11 +34,19 @@ namespace HookGenExtender.Core.ILGeneration {
 		}
 
 		/// <summary>
+		/// Emits an instruction directly.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="instruction"></param>
+		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Instruction Emit(this CilBody body, Instruction instruction) => body.Instructions.Add(instruction);
+
+		/// <summary>
 		/// Emits <c>ldarg_0</c> (<see langword="this"/>, in instance methods) in a method, for convenience.
 		/// </summary>
 		/// <param name="body"></param>
 		/// <returns></returns>
-		[DebuggerStepThrough]
+		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Instruction EmitThis(this CilBody body) => body.Emit(OpCodes.Ldarg_0);
 
 		/// <summary>
@@ -46,7 +55,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="body"></param>
 		/// <param name="constructor"></param>
 		/// <returns></returns>
-		[DebuggerStepThrough]
+		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Instruction EmitNew(this CilBody body, MemberRef constructor) => body.Emit(OpCodes.Newobj, constructor);
 
 		/// <summary>
@@ -54,17 +63,64 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// </summary>
 		/// <param name="body"></param>
 		/// <returns></returns>
-		[DebuggerStepThrough]
-		public static Instruction EmitRetn(this CilBody body) => body.Emit(OpCodes.Ret);
+		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Instruction EmitRet(this CilBody body) => body.Emit(OpCodes.Ret);
+
+		/// <summary>
+		/// Emits <see cref="OpCodes.Ldnull"/>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <returns></returns>
+		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Instruction EmitNull(this CilBody body) => body.Emit(OpCodes.Ldnull);
+
+		/// <summary>
+		/// Emits <see cref="OpCodes.Dup"/>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <returns></returns>
+		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Instruction EmitDup(this CilBody body) => body.Emit(OpCodes.Dup);
+
+		/// <summary>
+		/// Creates, but does <strong>NOT</strong> emit, <see cref="OpCodes.Nop"/>. 
+		/// This is done with the intent of the nop being used as a destination for branches.
+		/// <para/>
+		/// This instruction's operand is the <see cref="CilBody"/> that this is called with. This enforces
+		/// that you must use <see cref="ExtendedCILBody.OptimizeNopJumps(CilBody)"/> before emitting to the DLL file
+		/// otherwise an exception will occur.
+		/// </summary>
+		/// <returns></returns>
+		public static Instruction NewBrDest(this CilBody body) {
+			return new Instruction(OpCodes.Nop, body);
+		}
+
+		/// <summary>
+		/// Emits ldargs: <c>[startFromArg, numArgs)</c>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="numArgs"></param>
+		/// <returns>The first instruction of the generated code, or null if no args were generated.</returns>
+		public static Instruction EmitAllArgs(this CilBody body, int numArgs, int startFromArg = 0) {
+			Instruction first = null;
+			for (int i = startFromArg; i < numArgs; i++) {
+				Instruction ldarg = body.EmitLdarg(i);
+				if (first == null) first = ldarg;
+			}
+			return first;
+		}
 
 		/// <summary>
 		/// Emits the code equivalent to <see langword="typeof"/>(<paramref name="type"/>).
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="type"></param>
-		public static void EmitTypeof(this CilBody body, ExtensiblesGenerator main, ITypeDefOrRef type) {
-			body.Emit(OpCodes.Ldtoken, type);
-			body.Emit(OpCodes.Call, main.Shared.GetTypeFromHandle);
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitTypeof(this CilBody body, ExtensiblesGenerator main, ITypeDefOrRef type) {
+			// TO FUTURE XAN: In case you come back and wonder, no, TypeSig is not valid here.
+			Instruction first = body.Emit(OpCodes.Ldtoken, type);
+			body.EmitCall(main.Shared.GetTypeFromHandle);
+			return first;
 		}
 
 		/// <summary>
@@ -73,24 +129,31 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// representing "returns a <see cref="MethodInfo"/> from a method signature", much like how
 		/// <see langword="typeof"/> returns a <see cref="Type"/> from a type signature.
 		/// </summary>
+		/// <returns>The first instruction of the generated code.</returns>
 		/// <param name="body"></param>
 		/// <param name="method"></param>
-		public static void EmitMethodof(this CilBody body, ExtensiblesGenerator main, MemberRef method) {
-			body.Emit(OpCodes.Ldtoken, method);
-			body.Emit(OpCodes.Call, main.Shared.GetMethodFromHandle);
+		public static Instruction EmitMethodof(this CilBody body, ExtensiblesGenerator main, IMethod method) {
+			// TO FUTURE XAN: In case you come back and wonder, no, MethodSig is not valid here.
+			Instruction first = body.Emit(OpCodes.Ldtoken, method);
+			body.EmitCall(main.Shared.GetMethodFromHandle);
+			return first;
 		}
+
 
 		/// <summary>
 		/// Emits instructions to throw an <see cref="InvalidOperationException"/> with the provided message.
+		/// If the message is null, it will use a string already on the stack.
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="main"></param>
-		/// <param name="message"></param>
-		/// <returns></returns>
-		public static void EmitInvalidOpException(this CilBody body, ExtensiblesGenerator main, string message) {
-			body.Emit(OpCodes.Ldstr, message);
-			body.Emit(OpCodes.Newobj, main.Shared.InvalidOperationExceptionCtor);
+		/// <param name="message">A message, or <see langword="null"/> to use a string that is currently on the stack.</param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitInvalidOpException(this CilBody body, ExtensiblesGenerator main, string message) {
+			Instruction first = null;
+			if (message != null) first = body.Emit(OpCodes.Ldstr, message);
+			Instruction second = body.Emit(OpCodes.Newobj, main.Shared.InvalidOperationExceptionCtor);
 			body.Emit(OpCodes.Throw);
+			return first ?? second;
 		}
 
 		/// <summary>
@@ -98,12 +161,15 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <para/>
 		/// The message can be <see langword="null"/> to use the latest string on the stack instead.
 		/// </summary>
+		/// <returns>The first instruction of the generated code.</returns>
 		/// <param name="body"></param>
 		/// <param name="main"></param>
 		/// <param name="message">The message to display, or <see langword="null"/> to use the current string on the stack.</param>
-		public static void EmitUnityDbgLog(this CilBody body, ExtensiblesGenerator main, string message) {
-			if (message != null) body.Emit(OpCodes.Ldstr, message);
-			body.Emit(OpCodes.Call, main.Shared.UnityDebugLog);
+		public static Instruction EmitUnityDbgLog(this CilBody body, ExtensiblesGenerator main, string message) {
+			Instruction first = null;
+			if (message != null) first =body.Emit(OpCodes.Ldstr, message);
+			Instruction second = body.EmitCall(main.Shared.UnityDebugLog);
+			return first ?? second;
 		}
 
 		/// <summary>
@@ -115,25 +181,26 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="main"></param>
 		/// <param name="allAreGuaranteedStrings">If true, the system assumes you know <em>for a fact</em> that everything on the stack provided by <paramref name="createParts"/> is unquestionably a string. Setting this to true when this assertion is false will result in invalid IL and will crash the program.</param>
 		/// <param name="createParts"></param>
-		public static void EmitStringFormat(this CilBody body, ExtensiblesGenerator main, bool allAreGuaranteedStrings, params Action<CilBody, ExtensiblesGenerator>[] createParts) {
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitStringConcat(this CilBody body, ExtensiblesGenerator main, bool allAreGuaranteedStrings, params Action<CilBody, ExtensiblesGenerator>[] createParts) {
 			int amount = createParts.Length;
 			if (amount == 0) {
-				body.Emit(OpCodes.Ldstr, string.Empty);
-				return;
+				return body.Emit(OpCodes.Ldstr, string.Empty);
 			}
+			Instruction first = null;
 			if (amount <= 4) {
 				foreach (var act in createParts) act.Invoke(body, main);
 				int index = amount - 1;
 				if (allAreGuaranteedStrings) {
 					MemberRef[] array = allAreGuaranteedStrings ? main.Shared.StringConcatStrings : main.Shared.StringConcatObjects;
-					body.Emit(OpCodes.Call, array[index]);
+					first = body.EmitCall(array[index]);
 				}
 			} else {
 				// This one gets more complicated.
 				if (allAreGuaranteedStrings) {
-					body.Emit(OpCodes.Newarr, main.CorLibTypeSig<string>());
+					first = body.Emit(OpCodes.Newarr, main.CorLibTypeSig<string>());
 				} else {
-					body.Emit(OpCodes.Newarr, main.CorLibTypeSig<object>());
+					first = body.Emit(OpCodes.Newarr, main.CorLibTypeSig<object>());
 				}
 				body.Emit(OpCodes.Dup);
 				for (int i = 0; i < amount; i++) {
@@ -147,8 +214,9 @@ namespace HookGenExtender.Core.ILGeneration {
 						body.Emit(OpCodes.Dup);
 					}
 				}
-				body.Emit(OpCodes.Call, allAreGuaranteedStrings ? main.Shared.StringConcatStrings[4] : main.Shared.StringConcatObjects[4]);
+				body.EmitCall(allAreGuaranteedStrings ? main.Shared.StringConcatStrings[4] : main.Shared.StringConcatObjects[4]);
 			}
+			return first;
 		}
 
 		/// <summary>
@@ -156,42 +224,73 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="main"></param>
-		public static void EmitTostring(this CilBody body, ExtensiblesGenerator main) {
-			body.Emit(OpCodes.Callvirt, main.Shared.ToStringRef);
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitTostring(this CilBody body, ExtensiblesGenerator main) {
+			return body.EmitCallvirt(main.Shared.ToStringRef);
 		}
 
 		/// <summary>
-		/// Emits code that loads the provided field. It will automatically emit the proper opcode(s) based on whether or not the field is static.
+		/// Emits code that loads the provided field from the current type. It will automatically emit the proper opcode(s) based on whether or not the field is static.
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="memberRef"></param>
 		/// <returns></returns>
-		public static void EmitLdfldAuto(this CilBody body, FieldDefAndRef field, bool byReference = false) {
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitLdThisFldAuto(this CilBody body, FieldDefAndRef field, bool byReference = false) {
 			OpCode load;
+			Instruction first = null;
 			if (field.Definition.IsStatic) {
 				load = byReference ? OpCodes.Ldsflda : OpCodes.Ldsfld;
 			} else {
 				load = byReference ? OpCodes.Ldfld : OpCodes.Ldflda;
-				body.Emit(OpCodes.Ldarg_0);
+				first = body.Emit(OpCodes.Ldarg_0);
 			}
-			body.Emit(load, field.Reference);
+			Instruction second = body.Emit(load, field.Reference);
+			return first ?? second;
 		}
 
 		/// <summary>
-		/// Emits code that loads the provided field. It will automatically emit the proper opcode(s) based on whether or not the field is static.
+		/// Emits code that calls the getter of the provided property. It will automatically emit the proper opcode(s) based on whether or not the property is static and virtual.
 		/// </summary>
 		/// <param name="body"></param>
-		/// <param name="memberRef"></param>
-		/// <returns></returns>
-		public static void EmitStfldAuto(this CilBody body, FieldDefAndRef field) {
-			OpCode store;
-			if (field.Definition.IsStatic) {
-				store = OpCodes.Stsfld;
+		/// <param name="property"></param>
+		/// <param name="explicitCall">If true, this MUST be an explicit call (<see cref="OpCodes.Call"/>). This should be true when the goal is to use <see langword="base"/>.Property</param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitGetPropAuto(this CilBody body, PropertyDefAndRef property, bool explicitCall = false) {
+			OpCode call;
+			Instruction first = null;
+			if (property.Getter == null) throw new InvalidOperationException($"The provided property ({property.Definition.FullName}) does not have a getter.");
+			if (property.Definition.IsStatic() || explicitCall) {
+				call = OpCodes.Call;
 			} else {
-				store = OpCodes.Stfld;
-				body.Emit(OpCodes.Ldarg_0);
+				call = OpCodes.Callvirt;
+				first = body.EmitThis();
 			}
-			body.Emit(store, field.Reference);
+			Instruction second = body.Emit(call, property.Getter.Reference);
+			return first ?? second;
+		}
+
+		/// <summary>
+		/// Emits code that calls the setter of the provided property.
+		/// <para/>
+		/// <strong>Unlike <see cref="EmitGetPropAuto(CilBody, PropertyDefAndRef)"/>, this can NOT automatically emit the full code.</strong>
+		/// If the property is an instance property, you must invoke <see cref="EmitThis(CilBody)"/> followed by the code to push the value on the stack.
+		/// <para/>
+		/// <strong>This only emits the appropriate call type (call vs. callvirt based on whether or not the property is static) and nothing else.</strong>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="property"></param>
+		/// <param name="explicitCall">If true, this MUST be an explicit call (<see cref="OpCodes.Call"/>). This should be true when the goal is to use <see langword="base"/>.Property</param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitSetProp(this CilBody body, PropertyDefAndRef property, bool explicitCall = false) {
+			OpCode call;
+			if (property.Setter == null) throw new InvalidOperationException($"The provided property ({property.Definition.FullName}) does not have a setter.");
+			if (property.Definition.IsStatic() || explicitCall) {
+				call = OpCodes.Call;
+			} else {
+				call = OpCodes.Callvirt;
+			}
+			return body.Emit(call, property.Setter.Reference);
 		}
 
 		/// <summary>
@@ -203,10 +302,205 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="method"></param>
 		/// <param name="noVTable"></param>
 		/// <returns></returns>
+		/// <returns>The first instruction of the generated code.</returns>
 		public static Instruction EmitCallAuto(this CilBody body, MethodDefAndRef method, bool noVTable = false) {
 			bool canCallVirt = !method.Definition.IsStatic && !noVTable;
 			if (canCallVirt) return body.Emit(OpCodes.Callvirt, method.Reference);
 			return body.Emit(OpCodes.Call, method.Reference);
+		}
+
+		/// <summary>
+		/// Emits <see cref="OpCodes.Call"/>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="method"></param>
+		/// <returns></returns>
+		public static Instruction EmitCall(this CilBody body, IMemberRef method) => body.Emit(OpCodes.Call, method);
+
+		/// <summary>
+		/// Emits <see cref="OpCodes.Callvirt"/>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="method"></param>
+		/// <returns></returns>
+		public static Instruction EmitCallvirt(this CilBody body, IMemberRef method) => body.Emit(OpCodes.Callvirt, method);
+
+		/// <summary>
+		/// Emits <see cref="OpCodes.Call"/>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="method"></param>
+		/// <returns></returns>
+		public static Instruction EmitCall(this CilBody body, IMemberDefAndRef method) => body.Emit(OpCodes.Call, method);
+
+		/// <summary>
+		/// Emits <see cref="OpCodes.Callvirt"/>
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="method"></param>
+		/// <returns></returns>
+		public static Instruction EmitCallvirt(this CilBody body, IMemberDefAndRef method) => body.Emit(OpCodes.Callvirt, method);
+
+		/// <summary>
+		/// Emits all the instructions necessary for a call to <see cref="Type.GetMethod(string, BindingFlags, Binder, Type[], ParameterModifier[])"/>.
+		/// This assumes the type to call it on is already on the stack.
+		/// Leaves behind a <see cref="MethodInfo"/> on the stack.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <param name="name">The name to load, or null to use the string currently on the stack.</param>
+		/// <param name="bindingFlags"></param>
+		/// <param name="types"></param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitGetMethod(this CilBody body, ExtensiblesGenerator main, string name, BindingFlags bindingFlags, ITypeDefOrRef[] types) {
+			Instruction first = null;
+			if (name != null) first = body.Emit(OpCodes.Ldstr, name);
+			Instruction second = body.EmitLdc_I4((int)bindingFlags);
+			body.EmitNull();
+			body.EmitArray(main, main.Shared.TypeSig, types.Select<ITypeDefOrRef, Action<CilBody, ExtensiblesGenerator>>(typeRef => {
+				return (CilBody body, ExtensiblesGenerator main) => {
+					body.EmitTypeof(main, typeRef);
+				};
+			}).ToArray());
+			body.EmitNull();
+			body.EmitCallvirt(main.Shared.GetMethod);
+			return first ?? second;
+		}
+
+		/// <summary>
+		/// Emits all the instructions necessary for a call to <see cref="Type.GetConstructor(BindingFlags, Binder, Type[], ParameterModifier[])"/>.
+		/// This assumes the type to call it on is already on the stack.
+		/// Leaves behind a <see cref="ConstructorInfo"/> on the stack.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <param name="bindingFlags"></param>
+		/// <param name="types"></param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitGetConstructor(this CilBody body, ExtensiblesGenerator main, BindingFlags bindingFlags, ITypeDefOrRef[] types) {
+			Instruction first = body.EmitLdc_I4((int)bindingFlags);
+			body.EmitNull();
+			body.EmitArray(main, main.Shared.TypeSig, types.Select<ITypeDefOrRef, Action<CilBody, ExtensiblesGenerator>>(typeRef => {
+				return (CilBody body, ExtensiblesGenerator main) => {
+					body.EmitTypeof(main, typeRef);
+				};
+			}).ToArray());
+			body.EmitNull();
+			body.EmitCallvirt(main.Shared.GetConstructor);
+			return first;
+		}
+
+		/// <summary>
+		/// Emits the instructions necessary to instantiate a new array of the provided <paramref name="arrayType"/> with the provided 
+		/// elements generated by the provided instructions.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <param name="arrayType"></param>
+		/// <param name="instructionsForObjects"></param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitArray(this CilBody body, ExtensiblesGenerator main, TypeSig arrayType, params Action<CilBody, ExtensiblesGenerator>[] instructionsForObjects) {
+			int length = instructionsForObjects.Length;
+			Instruction first = body.EmitLdc_I4(length);
+			body.Emit(OpCodes.Newarr, arrayType);
+			if (length == 0) return first;
+
+			body.EmitDup();
+			for (int i = 0; i < length; i++) {
+				body.EmitLdc_I4(i);
+				Action<CilBody, ExtensiblesGenerator> emitter = instructionsForObjects[i] ?? throw new ArgumentNullException($"instructionsForObjects[{i}] is null.");
+				emitter.Invoke(body, main);
+				body.Emit(OpCodes.Stelem, arrayType);
+				if (i < length - 1) {
+					body.EmitDup();
+				}
+			}
+			// Array is left behind on the stack.
+			return first;
+		}
+
+		/// <summary>
+		/// Emits all arguments <c>[0, numArgs)</c> into an array of object[], and leaves the object[] array on the stack.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <param name="arrayLength"></param>
+		/// <param name="startIndex">The index to start writing at.</param>
+		/// <param name="firstArgIndex">The argument number to start at.</param>
+		/// <param name="assumeArrayAlreadyOnStack">If true, this assumes the array is the current stack element.</param>
+		/// <returns>The first instruction of the generated code, or null if no code was generated for the array.</returns>
+		public static Instruction EmitArrayOfArgs(this CilBody body, ExtensiblesGenerator main, int arrayLength, int startIndex = 0, int firstArgIndex = 0, bool assumeArrayAlreadyOnStack = false) {
+			if (arrayLength < 0) throw new ArgumentOutOfRangeException(nameof(arrayLength), "The length of the array must be greater than or equal to 0.");
+			if (startIndex < 0) throw new ArgumentOutOfRangeException(nameof(startIndex), "Start index must be greater than or equal to 0.");
+			if (firstArgIndex < 0) throw new ArgumentOutOfRangeException(nameof(startIndex), "First argument index must be greater than or equal to 0.");
+			if (firstArgIndex >= arrayLength) throw new ArgumentOutOfRangeException(nameof(firstArgIndex), "The first argument index is too large. It must be less than the number of arguments.");
+
+			Instruction first = null;
+			Instruction second = null;
+			if (!assumeArrayAlreadyOnStack) {
+				first = body.EmitLdc_I4(arrayLength);
+				body.Emit(OpCodes.Newarr, main.CorLibTypeSig<object>());
+			}
+			if (arrayLength == 0) return first;
+
+			if (arrayLength - startIndex > 0) {
+				second = body.EmitDup();
+			}
+			int argIndex = firstArgIndex;
+			for (int i = startIndex; i < arrayLength; i++) {
+				body.EmitLdc_I4(i);
+				body.EmitLdarg(argIndex++);
+				body.Emit(OpCodes.Stelem, main.CorLibTypeSig<object>());
+				if (i < arrayLength - 1) {
+					body.EmitDup();
+				}
+			}
+			// Array is left behind on the stack.
+			return first ?? second;
+		}
+
+		/// <summary>
+		/// Use this to begin a for loop. The <paramref name="continueJump"/> and <paramref name="breakJump"/> instruction should be passed into <see cref="EmitForLoopTail(CilBody, Local, in Instruction, in Instruction, int)"/>.
+		/// Your loop code should be placed directly under this. Do not increment <paramref name="countVariable"/> yourself.
+		/// Once your code is written, call <see cref="EmitForLoopTail(CilBody, Local, in Instruction, in Instruction, int)"/> to mark the end/repeat of the loop.
+		/// <para/>
+		/// This line is comparable to this stub: <c>for (<see cref="int"/> <paramref name="countVariable"/> = ...; <paramref name="countVariable"/> &lt; <paramref name="lengthVariable"/>; </c> -- you should set the value of <paramref name="countVariable"/> and <paramref name="lengthVariable"/> before calling this, but do <strong>NOT</strong> need to update them yourself.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="lengthVariable"></param>
+		/// <param name="countVariable"></param>
+		/// <param name="continueJump">This instruction should be jumped to when the desire is to move to the next iteration. <strong>Do not emit this instruction!</strong></param>
+		/// <param name="breakJump">This instruction should be jumped to when the desire is to break out of the loop. <strong>Do not emit this instruction!</strong></param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitForLoopHead(this CilBody body, Local countVariable, Local lengthVariable, out Instruction continueJump, out Instruction breakJump) {
+			continueJump = body.NewBrDest();
+			Instruction first = body.Emit(continueJump);
+			breakJump = body.NewBrDest();
+			body.EmitLdloc(countVariable);
+			body.EmitLdloc(lengthVariable);
+			body.Emit(OpCodes.Bge, breakJump);
+			// User code would go here, which is after they call this method.
+			return first;
+		}
+
+		/// <summary>
+		///	Use this after the code that should run in a for loop. This will jump back to the head (see <see cref="EmitForLoopHead(CilBody, Local, Local, out Instruction, out Instruction)"/>) if needed.
+		///	<para/>
+		///	This line is comparable to appending <c>i += incrementBy) {</c> to the stub (see <see cref="EmitForLoopHead(CilBody, Local, Local, out Instruction, out Instruction)"/>), as well as the closing }.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="countVariable"></param>
+		/// <param name="continueJump"></param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitForLoopTail(this CilBody body, Local countVariable, in Instruction continueJump, in Instruction breakJump, int incrementBy = 1) {
+			// User code would be up here at this line...
+			Instruction first = body.EmitLdloc(countVariable);
+			body.EmitLdc_I4(incrementBy);
+			body.Emit(OpCodes.Add);
+			body.EmitStloc(countVariable);
+			body.Emit(OpCodes.Br, continueJump);
+			body.Emit(breakJump);
+			return first;
 		}
 
 		/// <summary>
@@ -218,11 +512,83 @@ namespace HookGenExtender.Core.ILGeneration {
 		public static Parameter ParameterIndex(int arg) => new Parameter(arg);
 
 		/// <summary>
-		/// Returns the version of Ldarg best suited for the input argument index. This also allows inputting the argument index as an int32.
+		/// Emits and returns the version of Ldarg best suited for the input argument index. This also allows inputting the argument index as an int32.
 		/// </summary>
 		/// <param name="argN"></param>
 		/// <returns></returns>
 		public static Instruction EmitLdarg(this CilBody body, int argN, bool asReference = false) {
+			Instruction result = GetLdarg(argN, asReference);
+			body.Instructions.Add(result);
+			return result;
+		}
+
+		/// <summary>
+		/// Emits and returns the version of Ldc_I4 best suited for the input integer value.
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static Instruction EmitLdc_I4(this CilBody body, int value) {
+			Instruction result = GetLdc_I4(value);
+			body.Instructions.Add(result);
+			return result;
+		}
+
+		/// <summary>
+		/// Emits and returns the version of Ldc_I4 best suited for the input integer value.
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static Instruction EmitLdc_I4(this CilBody body, uint value) {
+			Instruction result = GetLdc_I4(value);
+			body.Instructions.Add(result);
+			return result;
+		}
+
+		/// <summary>
+		/// Emit a string, or null.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static Instruction EmitValue(this CilBody body, string value) {
+			if (value is null) return EmitNull(body);
+			return Emit(body, OpCodes.Ldstr, value);
+		}
+
+		/// <summary>
+		/// Emit a boolean value via ldc_i4
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static Instruction EmitValue(this CilBody body, bool value) => EmitLdc_I4(body, value ? 1 : 0);
+
+		public static Instruction EmitValue(this CilBody body, sbyte value) => EmitLdc_I4(body, value);
+
+		public static Instruction EmitValue(this CilBody body, byte value) => EmitLdc_I4(body, value);
+
+		public static Instruction EmitValue(this CilBody body, short value) => EmitLdc_I4(body, value);
+
+		public static Instruction EmitValue(this CilBody body, ushort value) => EmitLdc_I4(body, value);
+
+		public static Instruction EmitValue(this CilBody body, int value) => EmitLdc_I4(body, value);
+
+		public static Instruction EmitValue(this CilBody body, uint value) => EmitLdc_I4(body, value);
+
+		public static Instruction EmitValue(this CilBody body, float value) => body.Emit(OpCodes.Ldc_R4, value);
+
+		public static Instruction EmitValue(this CilBody body, double value) => body.Emit(OpCodes.Ldc_R8, value);
+
+		public static Instruction EmitValue(this CilBody body, long value) => body.Emit(OpCodes.Ldc_I8, value);
+
+		public static Instruction EmitValue(this CilBody body, ulong value) => body.Emit(OpCodes.Ldc_I8, value);
+
+		/// <summary>
+		/// Returns the version of Ldarg best suited for the input argument index. This also allows inputting the argument index as an int32.
+		/// </summary>
+		/// <param name="argN"></param>
+		/// <returns></returns>
+		public static Instruction GetLdarg(int argN, bool asReference = false) {
 			// If the value is greater than 3 (or its a reference), but less than the byte max value, use _S.
 			if ((argN > 3 || asReference) && argN <= byte.MaxValue) return new Instruction(asReference ? OpCodes.Ldarga_S : OpCodes.Ldarg_S, ParameterIndex(argN));
 			if (asReference) return new Instruction(OpCodes.Ldarga, ParameterIndex(argN));
@@ -233,7 +599,6 @@ namespace HookGenExtender.Core.ILGeneration {
 				3 => OpCodes.Ldarg_3.ToInstruction(),
 				_ => new Instruction(OpCodes.Ldarg, ParameterIndex(argN))
 			};
-			body.Instructions.Add(result);
 			return result;
 		}
 
@@ -242,7 +607,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// </summary>
 		/// <param name="value"></param>
 		/// <returns></returns>
-		public static Instruction EmitLdc_I4(this CilBody body, int value) {
+		public static Instruction GetLdc_I4(int value) {
 			// If the value is within the sbyte range, and it's not within the range of [-1, 8], use _S.
 			if (value >= sbyte.MinValue && value <= sbyte.MaxValue && (value < -1 || value > 8)) return new Instruction(OpCodes.Ldc_I4_S, (sbyte)value);
 			Instruction result = value switch {
@@ -258,7 +623,29 @@ namespace HookGenExtender.Core.ILGeneration {
 				8 => OpCodes.Ldc_I4_8.ToInstruction(),
 				_ => OpCodes.Ldc_I4.ToInstruction(value)
 			};
-			body.Instructions.Add(result);
+			return result;
+		}
+
+		/// <summary>
+		/// Returns the version of Ldc_I4 best suited for the input integer value.
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static Instruction GetLdc_I4(uint value) {
+			// If the value is within the sbyte range, and it's not within the range of [-1, 8], use _S.
+			if (value > 8 && value <= sbyte.MaxValue) return new Instruction(OpCodes.Ldc_I4_S, (sbyte)value);
+			Instruction result = value switch {
+				0 => OpCodes.Ldc_I4_0.ToInstruction(),
+				1 => OpCodes.Ldc_I4_1.ToInstruction(),
+				2 => OpCodes.Ldc_I4_2.ToInstruction(),
+				3 => OpCodes.Ldc_I4_3.ToInstruction(),
+				4 => OpCodes.Ldc_I4_4.ToInstruction(),
+				5 => OpCodes.Ldc_I4_5.ToInstruction(),
+				6 => OpCodes.Ldc_I4_6.ToInstruction(),
+				7 => OpCodes.Ldc_I4_7.ToInstruction(),
+				8 => OpCodes.Ldc_I4_8.ToInstruction(),
+				_ => OpCodes.Ldc_I4.ToInstruction(value)
+			};
 			return result;
 		}
 
@@ -357,7 +744,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="locals"></param>
-		public static void OverwriteLocalsWith(this CilBody body, params Local[] locals) {
+		public static void SetLocals(this CilBody body, params Local[] locals) {
 			body.Variables.Clear();
 			AppendLocals(body, locals);
 		}
@@ -372,17 +759,6 @@ namespace HookGenExtender.Core.ILGeneration {
 				Local local = body.Variables[i];
 				local.SetIndex(i);
 			}
-		}
-
-		/// <summary>
-		/// Optimizes the entire method body and appends a <see cref="OpCodes.Ret"/> onto the end if needed.
-		/// </summary>
-		/// <param name="body"></param>
-		public static void FinalizeBody(this CilBody body) {
-			body.OptimizeBranches();
-			body.OptimizeMacros();
-			body.UpdateInstructionOffsets();
-			body.BakeDefRefsDown();
 		}
 
 		#region Internal Garbage

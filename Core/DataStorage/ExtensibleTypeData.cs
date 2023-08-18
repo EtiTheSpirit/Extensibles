@@ -46,5 +46,9 @@ namespace HookGenExtender.Core.DataStorage {
 			ExtensibleType = replacement;
 			Binder = binder;
 		}
+
+		public override string ToString() {
+			return ExtensibleType.ToString();
+		}
 	}
 }

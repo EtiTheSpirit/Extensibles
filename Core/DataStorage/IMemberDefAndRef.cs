@@ -9,11 +9,6 @@ namespace HookGenExtender.Core.DataStorage {
 
 	public interface IMemberDefAndRef {
 		/// <summary>
-		/// The type that owns this method.
-		/// </summary>
-		CachedTypeDef Owner { get; }
-
-		/// <summary>
 		/// The module this is a part of.
 		/// </summary>
 		ModuleDef Module { get; }

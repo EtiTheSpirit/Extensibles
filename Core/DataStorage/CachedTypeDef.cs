@@ -153,7 +153,9 @@ namespace HookGenExtender.Core.DataStorage {
 			BaseModule = inModule;
 			_underlying = from;
 			Signature = _underlying.ToTypeSig();
-			inModule.Types.Add(_underlying);
+			if (!inModule.Types.Contains(_underlying)) {
+				inModule.Types.Add(_underlying);
+			}
 		}
 
 		public void AddMethod(MethodDefAndRef method) {

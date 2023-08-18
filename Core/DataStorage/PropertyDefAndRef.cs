@@ -39,15 +39,19 @@ namespace HookGenExtender.Core.DataStorage {
 
 		/// <summary>
 		/// Creates a new <see cref="PropertyDefAndRef"/> using the provided information. <paramref name="getterAttributes"/> determines the method attributes of the getter, or <see langword="null"/> to have no getter. Same with <paramref name="setterAttributes"/>.
+		/// <para/>
+		/// Despite receiving the declaring type, this <strong>DOES NOT</strong> register the method with the type!
 		/// </summary>
 		/// <param name="inModule"></param>
 		/// <param name="name"></param>
 		/// <param name="signature"></param>
 		/// <param name="declaringType"></param>
 		/// <param name="attrs"></param>
-		/// <param name="getterAttributes">The attributes of a pre-created, empty, getter method. Use null to have no getter.</param>
-		/// <param name="setterAttributes">The attributes of a pre-created, empty, setter method. Use null to have no setter.</param>
-		public PropertyDefAndRef(ModuleDef inModule, string name, PropertySig signature, IMemberRefParent declaringType, PropertyAttributes attrs, MethodAttributes? getterAttributes, MethodAttributes? setterAttributes) {
+		/// <param name="getterAttributes">The attributes of a pre-created, empty, getter method. Use null to have no getter. Note that <see cref="MethodAttributes.HideBySig"/> and <see cref="MethodAttributes.SpecialName"/> are both implicit and thus not needed.</param>
+		/// <param name="setterAttributes">The attributes of a pre-created, empty, setter method. Use null to have no setter. Note that <see cref="MethodAttributes.HideBySig"/> and <see cref="MethodAttributes.SpecialName"/> are both implicit and thus not needed.</param>
+		public PropertyDefAndRef(ModuleDef inModule, string name, PropertySig signature, IMemberRefParent declaringType, PropertyAttributes attrs = default, MethodAttributes? getterAttributes = default, MethodAttributes? setterAttributes = default) {
+			const MethodAttributes requiredAttributes = MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+
 			Definition = new PropertyDefUser(name, signature, attrs);
 			Module = inModule;
 
@@ -67,15 +71,23 @@ namespace HookGenExtender.Core.DataStorage {
 			}
 
 			if (getterAttributes != null) {
+				if ((getterAttributes.Value & requiredAttributes) != 0) {
+					//throw new ArgumentException($"{nameof(getterAttributes)} has either SpecialName or HideBySig set")
+					// ^ Exception is too aggressive...
+					// I need a way to warn for this.
+				}
 				MethodSig getterSig = MethodSig.CreateStatic(signature.RetType);
 				getterSig.HasThis = !isStatic;
-				Getter = new MethodDefAndRef(inModule, name, getterSig, declaringType, getterAttributes.Value);
+				Getter = new MethodDefAndRef(inModule, name, getterSig, declaringType, getterAttributes.Value | requiredAttributes);
 				Definition.GetMethod = Getter.Definition;
 			}
 			if (setterAttributes != null) {
+				if ((setterAttributes.Value & requiredAttributes) != 0) {
+
+				}
 				MethodSig setterSig = MethodSig.CreateStatic(inModule.CorLibTypes.Void, signature.RetType);
 				setterSig.HasThis = !isStatic;
-				Setter = new MethodDefAndRef(inModule, name, setterSig, declaringType, setterAttributes.Value);
+				Setter = new MethodDefAndRef(inModule, name, setterSig, declaringType, setterAttributes.Value | requiredAttributes);
 				Definition.SetMethod = Setter.Definition;
 			}
 		}

@@ -23,12 +23,32 @@ namespace HookGenExtender.Core.DataStorage {
 
 		public IMemberRef Reference { get; }
 
+		/// <summary>
+		/// Create a new field, and also a reference to itself.
+		/// <para/>
+		/// Despite receiving the declaring type, this <strong>DOES NOT</strong> register the method with the type!
+		/// </summary>
+		/// <param name="inModule"></param>
+		/// <param name="name"></param>
+		/// <param name="signature"></param>
+		/// <param name="declaringType"></param>
+		/// <param name="attrs"></param>
 		public FieldDefAndRef(ModuleDef inModule, string name, FieldSig signature, IMemberRefParent declaringType, FieldAttributes attrs) {
 			Module = inModule;
 			Definition = new FieldDefUser(name, signature, attrs);
 			Reference = new MemberRefUser(inModule, name, signature, declaringType);
 		}
 
+		/// <summary>
+		/// Reference an existing field declaration.
+		/// <para/>
+		/// Despite receiving the declaring type, this <strong>DOES NOT</strong> register the method with the type!
+		/// </summary>
+		/// <param name="inModule"></param>
+		/// <param name="name"></param>
+		/// <param name="signature"></param>
+		/// <param name="declaringType"></param>
+		/// <param name="attrs"></param>
 		public FieldDefAndRef(ModuleDef inModule, FieldDef original, IMemberRefParent declaringType) {
 			Module = inModule;
 			Definition = original;

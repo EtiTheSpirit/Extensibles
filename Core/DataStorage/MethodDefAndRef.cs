@@ -13,8 +13,19 @@ namespace HookGenExtender.Core.DataStorage {
 	/// </summary>
 	public sealed class MethodDefAndRef : IMemberDefAndRef<MethodDefAndRef, MethodDef> {
 
+		/// <summary>
+		/// The type that owns this method. This is set by <see cref="CachedTypeDef.AddMethod(MethodDefAndRef)"/>.
+		/// </summary>
 		public CachedTypeDef Owner { get; internal set; }
 
+		/// <summary>
+		/// The name of the method.
+		/// </summary>
+		public string Name => Definition.Name;
+
+		/// <summary>
+		/// The module this method exists in.
+		/// </summary>
 		public ModuleDef Module { get; }
 
 		/// <summary>
@@ -25,6 +36,7 @@ namespace HookGenExtender.Core.DataStorage {
 		IMemberDef IMemberDefAndRef.Definition => Definition;
 
 		public IMemberRef Reference { get; }
+
 
 		/// <summary>
 		/// A reference to the method body.
@@ -53,6 +65,8 @@ namespace HookGenExtender.Core.DataStorage {
 
 		/// <summary>
 		/// Create a new method, and then make the method reference itself.
+		/// <para/>
+		/// Despite receiving the declaring type, this <strong>DOES NOT</strong> register the method with the type!
 		/// </summary>
 		/// <param name="inModule">The module that owns this method.</param>
 		/// <param name="name">The name of the method.</param>
@@ -64,9 +78,20 @@ namespace HookGenExtender.Core.DataStorage {
 			Module = inModule;
 			if (attrs.HasFlag(MethodAttributes.Static)) throw new ArgumentException($"For cleanliness, do not declare MethodAttributes.Static in {nameof(attrs)}. Instead, set the HasThis property of {nameof(signature)}");
 			Definition = new MethodDefUser(name, signature, attrs);
+			Definition.IsNoOptimization = true; // TODO: Is this necessary?
+			Definition.IsNoInlining = true; // This is definitely necessary as code flow is *extremely* important to Extensibles.
 			Reference = new MemberRefUser(inModule, name, signature, declaringType);
 		}
-
+		/// <summary>
+		/// Load an existing method, and then make a reference to that method.
+		/// <para/>
+		/// Despite receiving the declaring type, this <strong>DOES NOT</strong> register the method with the type!
+		/// This allows this constructor to be used on methods owned by other modules, to bulk the definition and reference together.
+		/// </summary>
+		/// <param name="inModule">The module that owns this method.</param>
+		/// <param name="original">The original method to store and reference.</param>
+		/// <param name="declaringType">The type that this method belongs to.</param>
+		/// <exception cref="ArgumentException">If <see cref="MethodAttributes.Static"/> is set.</exception>
 		public MethodDefAndRef(ModuleDef inModule, MethodDef original, IMemberRefParent declaringType) {
 			Module = inModule;
 			Definition = original;
@@ -79,6 +104,10 @@ namespace HookGenExtender.Core.DataStorage {
 
 		public MethodDefAndRef AsMemberOfType(IHasTypeDefOrRef type) {
 			return new MethodDefAndRef(Reference.Module, Definition, type.Reference);
+		}
+
+		public MethodDefAndRef AsMemberOfType(ITypeDefOrRef type) {
+			return new MethodDefAndRef(Reference.Module, Definition, type);
 		}
 
 		IMemberDefAndRef IMemberDefAndRef.AsMemberOfType(IHasTypeDefOrRef type) => AsMemberOfType(type);
