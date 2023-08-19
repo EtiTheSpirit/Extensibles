@@ -15,9 +15,9 @@ namespace HookGenExtender.Core.Utils.Ext {
 		/// </summary>
 		/// <param name="parameters"></param>
 		/// <returns></returns>
-		public static GenericInstanceTypeDef MakeGenericType(this ITypeDefOrRef tdor, params TypeSig[] parameters) {
+		public static GenericInstanceTypeDef MakeGenericType(this ITypeDefOrRef tdor, ExtensiblesGenerator main, params TypeSig[] parameters) {
 			if (tdor == null) throw new NullReferenceException();
-			return new GenericInstanceTypeDef(tdor, parameters);
+			return new GenericInstanceTypeDef(main, tdor, parameters);
 		}
 
 		/// <summary>
@@ -25,9 +25,9 @@ namespace HookGenExtender.Core.Utils.Ext {
 		/// </summary>
 		/// <param name="parameters"></param>
 		/// <returns></returns>
-		public static GenericInstanceTypeDef MakeGenericType(this IHasTypeDefOrRef tdor, params TypeSig[] parameters) {
+		public static GenericInstanceTypeDef MakeGenericType(this IHasTypeDefOrRef tdor, ExtensiblesGenerator main, params TypeSig[] parameters) {
 			if (tdor == null) throw new NullReferenceException();
-			return new GenericInstanceTypeDef(tdor.Reference, parameters);
+			return new GenericInstanceTypeDef(main, tdor.Reference, parameters);
 		}
 
 		/// <summary>
@@ -38,8 +38,6 @@ namespace HookGenExtender.Core.Utils.Ext {
 		public static bool IsCompilerGenerated(this IHasCustomAttribute hasCustomAttribute) {
 			return hasCustomAttribute.CustomAttributes.FirstOrDefault(attr => attr.TypeFullName == "System.Runtime.CompilerServices.CompilerGeneratedAttribute") != null;
 		}
-
-		
 
 		/// <summary>
 		/// Returns whether or not a property is static.

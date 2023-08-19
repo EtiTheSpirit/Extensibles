@@ -27,7 +27,7 @@ namespace HookGenExtender.Core.ILGeneration {
 				_iAsyncResultTypeSig = main.Cache.ImportAsTypeSig(typeof(IAsyncResult));
 
 				_ctorSig = MethodSig.CreateInstance(main.CorLibTypeSig(), main.CorLibTypeSig<object>(), main.CorLibTypeSig<nint>());
-				_endInvokeSig = MethodSig.CreateInstance(_main.CorLibTypeSig<object>(), _iAsyncResultTypeSig);
+				_endInvokeSig = MethodSig.CreateInstance(main.CorLibTypeSig<object>(), _iAsyncResultTypeSig);
 			}
 
 			private static readonly ConditionalWeakTable<ExtensiblesGenerator, DelegateTypeFactory> _lookup = new ConditionalWeakTable<ExtensiblesGenerator, DelegateTypeFactory>();
@@ -49,9 +49,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			public DelegateTypeRef ReferenceDelegateType(MethodSig signature, ITypeDefOrRef delegateType) {
 				List<TypeSig> types = new List<TypeSig>(signature.Params.Count + 2);
 				IEnumerable<TypeSig> parameters = signature.Params;
-				parameters = parameters
-					.Where(param => param != signature.RetType)
-					.Select(param => _main.Cache.Import(param));
+				parameters = parameters.Select(param => _main.Cache.Import(param));
 
 				types.AddRange(parameters);
 				types.Add(_asyncCallbackTypeSig);
@@ -92,9 +90,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 				List<TypeSig> types = new List<TypeSig>(signature.Params.Count + 2);
 				IEnumerable<TypeSig> parameters = signature.Params;
-				parameters = parameters
-					.Where(param => param != signature.RetType)
-					.Select(param => _main.Cache.Import(param));
+				parameters = parameters.Select(param => _main.Cache.Import(param));
 
 				types.AddRange(parameters);
 				types.Add(_asyncCallbackTypeSig);
@@ -132,12 +128,12 @@ namespace HookGenExtender.Core.ILGeneration {
 				del.Methods.Add(endInvoke);
 
 				return new DelegateTypeDefAndRef(
-					_main.Extensibles,
+					_main,
 					del,
-					new MethodDefAndRef(_main.Extensibles, constructor, del),
-					new MethodDefAndRef(_main.Extensibles, invoke, del),
-					new MethodDefAndRef(_main.Extensibles, beginInvoke, del),
-					new MethodDefAndRef(_main.Extensibles, endInvoke, del)
+					new MethodDefAndRef(_main, constructor, del, false),
+					new MethodDefAndRef(_main, invoke, del, false),
+					new MethodDefAndRef(_main, beginInvoke, del, false),
+					new MethodDefAndRef(_main, endInvoke, del, false)
 				);
 			}
 		}
@@ -185,10 +181,39 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="index">The parameter index. On instance methods, 0 represents the first user-defined argument (that is, it does <em>not</em> represent the "<see langword="this"/>" keyword)</param>
 		/// <param name="name">The name of this parameter.</param>
 		public static void SetParameterName(this MethodDef onMethod, int index, string name) {
+			if (onMethod.HasThis) index++;
 			Parameter param = onMethod.Parameters[index];
 			if (!param.HasParamDef) param.CreateParamDef();
 			param.Name = name;
 		}
+		/// <summary>
+		/// Sets the name of the parameter at the given index. Index 0 represents the first argument, excluding <see langword="this"/> on instance methods.
+		/// </summary>
+		/// <param name="onMethod">The method to modify.</param>
+		/// <param name="index">The parameter index. On instance methods, 0 represents the first user-defined argument (that is, it does <em>not</em> represent the "<see langword="this"/>" keyword)</param>
+		/// <param name="name">The name of this parameter.</param>
+		public static void SetParameterName(this MethodDefAndRef onMethod, int index, string name) => SetParameterName(onMethod.Definition, index, name);
+
+		/// <summary>
+		/// Returns the name of the provided parameter, or <see langword="null"/> if no such parameter exists or if it has no data.
+		/// </summary>
+		/// <param name="onMethod"></param>
+		/// <param name="index"></param>
+		/// <returns></returns>
+		public static string GetParameterName(this MethodDef onMethod, int index) {
+			if (onMethod.HasThis) index++;
+			Parameter param = onMethod.Parameters[index];
+			if (!param.HasParamDef) return null;
+			return param.Name;
+		}
+
+		/// <summary>
+		/// Returns the name of the provided parameter, or <see langword="null"/> if no such parameter exists or if it has no name.
+		/// </summary>
+		/// <param name="onMethod"></param>
+		/// <param name="index"></param>
+		/// <returns></returns>
+		public static string GetParameterName(this MethodDefAndRef onMethod, int index) => GetParameterName(onMethod.Definition, index);
 
 		/// <summary>
 		/// Alias to <see cref="Parameter.CreateParamDef"/> that returns the existing or new instance.

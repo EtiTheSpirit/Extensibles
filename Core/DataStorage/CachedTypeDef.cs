@@ -17,17 +17,22 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <summary>
 		/// The underlying type reference.
 		/// </summary>
-		private readonly TypeDef _underlying;
+		public TypeDef Underlying { get; }
+
+		/// <summary>
+		/// The <see cref="ExtensiblesGenerator"/> that manages this type.
+		/// </summary>
+		public ExtensiblesGenerator Generator { get; }
 
 		/// <summary>
 		/// Generic parameters, if this type is generic.
 		/// </summary>
-		public IList<GenericParam> GenericParameters => _underlying.GenericParameters;
+		public IList<GenericParam> GenericParameters => Underlying.GenericParameters;
 
 		/// <summary>
 		/// A reference to the underlying user-defined type.
 		/// </summary>
-		public ITypeDefOrRef Reference => _underlying;
+		public ITypeDefOrRef Reference => Underlying;
 
 		/// <summary>
 		/// The signature of this type.
@@ -45,28 +50,9 @@ namespace HookGenExtender.Core.DataStorage {
 		public CachedTypeDef Base { get; private set; }
 
 		/// <summary>
-		/// The outer class, if this is a nested type.
-		/// </summary>
-		public CachedTypeDef Outer { get; private set; }
-
-		/// <summary>
 		/// The static constructor of this type.
 		/// </summary>
-		public MethodDef StaticConstructor => _underlying.FindOrCreateStaticConstructor();
-
-		/// <summary>
-		/// All inner (nested) types.
-		/// <para/>
-		/// <strong>DANGER: This is NOT synchronized! Changing the dnspy <see cref="TypeDef"/> will not reflect to this array!</strong>
-		/// </summary>
-		public IReadOnlyList<CachedTypeDef> Inner => _innerCache ??= _inner.AsReadOnly();
-
-		/// <summary>
-		/// All child (derived) types.
-		/// <para/>
-		/// <strong>DANGER: This is NOT synchronized! Changing the dnspy <see cref="TypeDef"/> will not reflect to this array!</strong>
-		/// </summary>
-		public IReadOnlyList<CachedTypeDef> Children => _derivedCache ??= _derived.AsReadOnly();
+		public MethodDef StaticConstructor => Underlying.FindOrCreateStaticConstructor();
 
 		/// <summary>
 		/// All inner (nested) types.
@@ -89,12 +75,6 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		public IReadOnlyList<PropertyDefAndRef> RichProperties => _richPropertiesCache ??= _richProperties.AsReadOnly();
 
-		private List<CachedTypeDef> _inner = new List<CachedTypeDef>();
-		private IReadOnlyList<CachedTypeDef> _innerCache = null;
-
-		private List<CachedTypeDef> _derived = new List<CachedTypeDef>();
-		private IReadOnlyList<CachedTypeDef> _derivedCache = null;
-
 		private List<FieldDefAndRef> _richFields = new List<FieldDefAndRef>();
 		private IReadOnlyList<FieldDefAndRef> _richFieldsCache = null;
 
@@ -109,39 +89,43 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		/// <param name="inModule"></param>
 		/// <param name="name"></param>
-		public CachedTypeDef(ModuleDef inModule, UTF8String name, TypeAttributes attrs) {
-			BaseModule = inModule;
-			_underlying = new TypeDefUser(name);
-			_underlying.Attributes = attrs;
+		public CachedTypeDef(ExtensiblesGenerator main, UTF8String name, TypeAttributes attrs) {
+			Generator = main;
+			BaseModule = main.Extensibles;
+			Underlying = new TypeDefUser(name);
+			Underlying.Attributes = attrs;
 			//Reference = new TypeRefUser(inModule, name);
-			inModule.Types.Add(_underlying);
+			BaseModule.Types.Add(Underlying);
 		}
 
-		public CachedTypeDef(ModuleDef inModule, UTF8String @namespace, UTF8String name, TypeAttributes attrs) {
-			BaseModule = inModule;
-			_underlying = new TypeDefUser(@namespace, name);
-			_underlying.Attributes = attrs;
-			Signature = _underlying.ToTypeSig();
+		public CachedTypeDef(ExtensiblesGenerator main, UTF8String @namespace, UTF8String name, TypeAttributes attrs) {
+			Generator = main;
+			BaseModule = main.Extensibles;
+			Underlying = new TypeDefUser(@namespace, name);
+			Underlying.Attributes = attrs;
+			Signature = Underlying.ToTypeSig();
 			//Reference = new TypeRefUser(inModule, @namespace, name);
-			inModule.Types.Add(_underlying);
+			BaseModule.Types.Add(Underlying);
 		}
 
-		public CachedTypeDef(ModuleDef inModule, UTF8String name, ITypeDefOrRef baseType, TypeAttributes attrs) {
-			BaseModule = inModule;
-			_underlying = new TypeDefUser(name, baseType);
-			_underlying.Attributes = attrs;
-			Signature = _underlying.ToTypeSig();
+		public CachedTypeDef(ExtensiblesGenerator main, UTF8String name, ITypeDefOrRef baseType, TypeAttributes attrs) {
+			Generator = main;
+			BaseModule = main.Extensibles;
+			Underlying = new TypeDefUser(name, baseType);
+			Underlying.Attributes = attrs;
+			Signature = Underlying.ToTypeSig();
 			//Reference = new TypeRefUser(inModule, name);
-			inModule.Types.Add(_underlying);
+			BaseModule.Types.Add(Underlying);
 		}
 
-		public CachedTypeDef(ModuleDef inModule, UTF8String @namespace, UTF8String name, ITypeDefOrRef baseType, TypeAttributes attrs) {
-			BaseModule = inModule;
-			_underlying = new TypeDefUser(@namespace, name, baseType);
-			_underlying.Attributes = attrs;
-			Signature = _underlying.ToTypeSig();
+		public CachedTypeDef(ExtensiblesGenerator main, UTF8String @namespace, UTF8String name, ITypeDefOrRef baseType, TypeAttributes attrs) {
+			Generator = main;
+			BaseModule = main.Extensibles;
+			Underlying = new TypeDefUser(@namespace, name, baseType);
+			Underlying.Attributes = attrs;
+			Signature = Underlying.ToTypeSig();
 			//Reference = new TypeRefUser(inModule, @namespace, name);
-			inModule.Types.Add(_underlying);
+			BaseModule.Types.Add(Underlying);
 		}
 
 		/// <summary>
@@ -149,12 +133,13 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		/// <param name="inModule"></param>
 		/// <param name="from"></param>
-		public CachedTypeDef(ModuleDef inModule, TypeDef from) {
-			BaseModule = inModule;
-			_underlying = from;
-			Signature = _underlying.ToTypeSig();
-			if (!inModule.Types.Contains(_underlying)) {
-				inModule.Types.Add(_underlying);
+		public CachedTypeDef(ExtensiblesGenerator main, TypeDef from) {
+			Generator = main;
+			BaseModule = main.Extensibles;
+			Underlying = from;
+			Signature = Underlying.ToTypeSig();
+			if (!BaseModule.Types.Contains(Underlying)) {
+				BaseModule.Types.Add(Underlying);
 			}
 		}
 
@@ -163,7 +148,7 @@ namespace HookGenExtender.Core.DataStorage {
 			if (method.Owner is CachedTypeDef instance) instance.RemoveMethod(method);
 			_richMethods.Add(method);
 			_richMethodsCache = null;
-			_underlying.Methods.Add(method.Definition);
+			Underlying.Methods.Add(method.Definition);
 			method.Owner = this;
 		}
 
@@ -171,7 +156,7 @@ namespace HookGenExtender.Core.DataStorage {
 			if (method.Owner != this) throw new ArgumentException($"The provided method {method} is not a part of this type.");
 			_richMethods.Remove(method);
 			_richMethodsCache = null;
-			_underlying.Methods.Remove(method.Definition);
+			Underlying.Methods.Remove(method.Definition);
 			method.Owner = null;
 		}
 
@@ -180,7 +165,7 @@ namespace HookGenExtender.Core.DataStorage {
 			if (field.Owner is CachedTypeDef instance) instance.RemoveField(field);
 			_richFields.Add(field);
 			_richFieldsCache = null;
-			_underlying.Fields.Add(field.Definition);
+			Underlying.Fields.Add(field.Definition);
 			field.Owner = this;
 		}
 
@@ -188,71 +173,46 @@ namespace HookGenExtender.Core.DataStorage {
 			if (field.Owner != this) throw new ArgumentException($"The provided field {field} is not a part of this type.");
 			_richFields.Remove(field);
 			_richFieldsCache = null;
-			_underlying.Fields.Remove(field.Definition);
+			Underlying.Fields.Remove(field.Definition);
 			field.Owner = null;
 		}
 
+		/// <summary>
+		/// Add a property to this type. This will automatically add its getters/setters too.
+		/// </summary>
+		/// <param name="property"></param>
 		public void AddProperty(PropertyDefAndRef property) {
 			if (property.Owner == this) return;
 			if (property.Owner is CachedTypeDef instance) instance.RemoveProperty(property);
 			_richProperties.Add(property);
 			_richPropertiesCache = null;
-			_underlying.Properties.Add(property.Definition);
+			Underlying.Properties.Add(property.Definition);
 			property.Owner = this;
+
+			if (property.Getter != null) AddMethod(property.Getter);
+			if (property.Setter != null) AddMethod(property.Setter);
 		}
 
+		/// <summary>
+		/// Remove a property from this type. This will automatically remove its getters/setters too.
+		/// </summary>
+		/// <param name="property"></param>
+		/// <exception cref="ArgumentException"></exception>
 		public void RemoveProperty(PropertyDefAndRef property) {
 			if (property.Owner != this) throw new ArgumentException($"The provided property {property} is not a part of this type.");
 			_richProperties.Remove(property);
 			_richPropertiesCache = null;
-			_underlying.Properties.Remove(property.Definition);
+			Underlying.Properties.Remove(property.Definition);
 			property.Owner = null;
+			if (property.Getter != null) RemoveMethod(property.Getter);
+			if (property.Setter != null) RemoveMethod(property.Setter);
 		}
 
-		public void ChangeBaseType(CachedTypeDef newBase) {
-			if (Base is CachedTypeDef @base) @base.RemoveChildType(this);
-			if (newBase == null) return;
-			newBase.AddChildType(this);
+		public void SetBase(CachedTypeDef newBase) {
+			Base = newBase;
+			Underlying.BaseType = newBase.Underlying;
 		}
 
-		public void AddChildType(CachedTypeDef child) {
-			if (child.Base is CachedTypeDef @base) @base.RemoveChildType(child);
-			_derived.Add(child);
-			_derivedCache = null;
-			child._underlying.BaseType = _underlying;
-			child.Base = this;
-		}
-
-		public void RemoveChildType(CachedTypeDef child) {
-			if (child.Base != this) throw new ArgumentException($"Cannot remove {child} as a derived type of {this} as it is not a derived type in the first place.");
-			_derived.Remove(child);
-			_derivedCache = null;
-			child._underlying.BaseType = null;
-			child.Base = null;
-		}
-
-		public void ChangeOuterClass(CachedTypeDef newOuter) {
-			if (Outer is CachedTypeDef instance) instance.RemoveInnerClass(this);
-			if (newOuter == null) return;
-			newOuter.AddInnerClass(this);
-		}
-
-		public void AddInnerClass(CachedTypeDef inner) {
-			if (inner.Outer is CachedTypeDef instance) instance.RemoveInnerClass(inner);
-			inner._underlying.DeclaringType = null;
-			inner._underlying.DeclaringType2 = _underlying;
-			_inner.Add(inner);
-			_innerCache = null;
-			inner.Outer = this;
-		}
-
-		public void RemoveInnerClass(CachedTypeDef inner) {
-			if (inner.Outer != this) throw new ArgumentException($"Cannot remove {inner} from {this} as it is not a nested type for this class.");
-			inner._underlying.DeclaringType = null;
-			_inner.Remove(inner);
-			_innerCache = null;
-			inner.Outer = null;
-		}
 
 		/// <summary>
 		/// Make a new generic type from this type and the provided parameters. You should store this result.
@@ -274,11 +234,11 @@ namespace HookGenExtender.Core.DataStorage {
 				if (genParamDef.HasDefaultConstructorConstraint) ; // TODO
 				if (genParamDef.HasGenericParamConstraints) ; // TODO
 			}
-			return new GenericInstanceTypeDef(Reference, parameters);
+			return new GenericInstanceTypeDef(Generator, Reference, parameters);
 		}
 
 		public override string ToString() {
-			return _underlying.ToString();
+			return Underlying.ToString();
 		}
 
 	}

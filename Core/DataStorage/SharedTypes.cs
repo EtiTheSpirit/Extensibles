@@ -16,6 +16,8 @@ namespace HookGenExtender.Core.DataStorage {
 	/// </summary>
 	public class SharedTypes {
 
+		private readonly ExtensiblesGenerator _main;
+
 		#region Storage Types and Members
 
 		#region WeakReference<T>
@@ -119,6 +121,11 @@ namespace HookGenExtender.Core.DataStorage {
 		public ITypeDefOrRef HashSetStringInstanceReference { get; }
 
 		/// <summary>
+		/// The signature of a predefined <see langword="new"/> <see cref="HashSet{T}"/>() where <c>T</c> is <see cref="string"/>.
+		/// </summary>
+		public MemberRef HashSetStringCtor { get; }
+
+		/// <summary>
 		/// An alias to <see cref="HashSetAddSig"/> on <see cref="HashSet{T}"/> where <c>T</c> is <see cref="string"/>.
 		/// </summary>
 		public MemberRef HashSetStringAdd { get; }
@@ -206,6 +213,11 @@ namespace HookGenExtender.Core.DataStorage {
 		public ITypeDefOrRef MethodBaseReference { get; }
 
 		/// <summary>
+		/// The <see cref="MethodBase.Invoke(object, object[])"/> method.
+		/// </summary>
+		public MemberRef MethodBaseInvoke { get; }
+
+		/// <summary>
 		/// The signature of <see cref="PropertyInfo"/>
 		/// </summary>
 		public TypeSig PropertyInfoSig { get; }
@@ -229,6 +241,11 @@ namespace HookGenExtender.Core.DataStorage {
 		/// A reference to <see cref="ConstructorInfo"/>.
 		/// </summary>
 		public ITypeDefOrRef ConstructorInfoReference { get; }
+
+		/// <summary>
+		/// The <see cref="ConstructorInfo.Invoke(object[])"/> method.
+		/// </summary>
+		public MemberRef ConstructorInfoInvoke { get; }
 
 		/// <summary>
 		/// The signature of <see cref="ConstructorInfo"/>
@@ -299,6 +316,7 @@ namespace HookGenExtender.Core.DataStorage {
 		/// A reference to the inequality operator of <see cref="MethodBase"/>
 		/// </summary>
 		public MemberRef MethodBasesNotEqual { get; }
+
 		/// <summary>
 		/// A reference to the equality operator of <see cref="MethodInfo"/>
 		/// </summary>
@@ -308,6 +326,16 @@ namespace HookGenExtender.Core.DataStorage {
 		/// A reference to the inequality operator of <see cref="MethodInfo"/>
 		/// </summary>
 		public MemberRef MethodInfosNotEqual { get; }
+
+		/// <summary>
+		/// A reference to the equality operator of <see cref="MethodInfo"/>
+		/// </summary>
+		public MemberRef PropertyInfosEqual { get; }
+
+		/// <summary>
+		/// A reference to the inequality operator of <see cref="MethodInfo"/>
+		/// </summary>
+		public MemberRef PropertyInfosNotEqual { get; }
 
 		/// <summary>
 		/// A reference to the equality operator of <see cref="ConstructorInfo"/>
@@ -324,9 +352,14 @@ namespace HookGenExtender.Core.DataStorage {
 		#region Object Members and String Members
 
 		/// <summary>
+		/// The <see cref="object.GetType"/> method.
+		/// </summary>
+		public MemberRef GetTypeReference { get; }
+
+		/// <summary>
 		/// The <see cref="object.ToString"/> method.
 		/// </summary>
-		public MemberRef ToStringRef { get; }
+		public MemberRef ToStringReference { get; }
 
 		/// <summary>
 		/// The variants of string.concat that accept 1 to 4 <see cref="object"/> arguments (as indices [0] to [3]). Index [4] is the one that accepts an array of objects.
@@ -369,10 +402,58 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		public MemberRef UnityDebugLog { get; }
 
+		/// <summary>
+		/// A reference to <see cref="UnityEngine.Debug.LogWarning(object)"/>
+		/// </summary>
+		public MemberRef UnityDebugLogWarning { get; }
+
 		#endregion
 
+		#region Dynamic Caches
+
+		private readonly Dictionary<Type, (ITypeDefOrRef, TypeSig)> _dynamicallyImportedTypes = new Dictionary<Type, (ITypeDefOrRef, TypeSig)>();
+		private readonly Dictionary<ITypeDefOrRef, Dictionary<string, MemberRef>> _dynamicallyReferencedMembers = new Dictionary<ITypeDefOrRef, Dictionary<string, MemberRef>>();
+
+		/// <summary>
+		/// Imports or accesses a cache of an original type.
+		/// </summary>
+		/// <param name="type"></param>
+		/// <param name="reference"></param>
+		/// <param name="signature"></param>
+		public void DynamicallyImport(Type type, out ITypeDefOrRef reference, out TypeSig signature) {
+			if (!_dynamicallyImportedTypes.TryGetValue(type, out ValueTuple<ITypeDefOrRef, TypeSig> result)) {
+				_main.Cache.ImportForReferenceAndSignature(type, out result.Item1, out result.Item2);
+				_dynamicallyImportedTypes[type] = result;
+			}
+
+			reference = result.Item1;
+			signature = result.Item2;
+		}
+
+		/// <summary>
+		/// This is cached, but will reference a method of a member.
+		/// </summary>
+		/// <param name="on"></param>
+		/// <param name="name"></param>
+		/// <param name="methodSigFactory"></param>
+		/// <returns></returns>
+		public MemberRef DynamicallyReferenceMethod(ITypeDefOrRef on, string name, Func<MethodSig> methodSigFactory) {
+			if (!_dynamicallyReferencedMembers.TryGetValue(on, out Dictionary<string, MemberRef> lookup)) {
+				lookup = new Dictionary<string, MemberRef>();
+				_dynamicallyReferencedMembers[on] = lookup;
+			}
+			if (!lookup.TryGetValue(name, out MemberRef result)) {
+				result = new MemberRefUser(_main.Extensibles, name, methodSigFactory(), on);
+				lookup[name] = result;
+			}
+			return result;
+		}
+
+		#endregion
 
 		public SharedTypes(ExtensiblesGenerator main) {
+			_main = main;
+
 			#region Local Methods
 			void GetEqualityMethod(ITypeDefOrRef type, TypeSig sig, out MemberRef eq, out MemberRef neq) {
 				MethodSig equality = MethodSig.CreateStatic(main.CorLibTypeSig<bool>(), sig, sig);
@@ -380,11 +461,13 @@ namespace HookGenExtender.Core.DataStorage {
 				neq = new MemberRefUser(main.Extensibles, "op_Inequality", equality, type);
 			}
 			#endregion
+			StringArray = main.Cache.ImportAsTypeSig(typeof(string[]));
+			ObjectArray = main.Cache.ImportAsTypeSig(typeof(object[]));
 
 			WeakReference = main.Cache.Import(typeof(WeakReference<>));
 			WeakReferenceSig = WeakReference.ToTypeSig();
 			WeakReferenceCtorSig = MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), CommonGenericArgs.TYPE_ARG_0);
-			WeakRefTryGetTargetSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.REF_TYPE_ARG_0);
+			WeakRefTryGetTargetSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.BYREF_TYPE_ARG_0);
 
 			main.Cache.ImportForReferenceAndSignature(typeof(ConditionalWeakTable<,>), out ITypeDefOrRef cwtRef, out TypeSig cwtSig);
 			CWTReference = cwtRef;
@@ -392,7 +475,7 @@ namespace HookGenExtender.Core.DataStorage {
 			CWTCtorSig = MethodSig.CreateInstance(main.CorLibTypeSig<Void>());
 			CWTAddSig = MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), CommonGenericArgs.TYPE_ARG_0, CommonGenericArgs.TYPE_ARG_1);
 			CWTRemoveSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.TYPE_ARG_0);
-			CWTTryGetValueSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.TYPE_ARG_0, CommonGenericArgs.REF_TYPE_ARG_1);
+			CWTTryGetValueSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.TYPE_ARG_0, CommonGenericArgs.BYREF_TYPE_ARG_1);
 
 			main.Cache.ImportForReferenceAndSignature(typeof(HashSet<>), out ITypeDefOrRef hashSetRef, out TypeSig hashSetSig);
 			HashSetReference = hashSetRef;
@@ -401,8 +484,10 @@ namespace HookGenExtender.Core.DataStorage {
 			HashSetAddSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.TYPE_ARG_0);
 			HashSetRemoveSig = HashSetAddSig.Clone(); // Remove and Contains both have the same exact signature as Add so just clone them instead of rewriting this.
 			HashSetContainsSig = HashSetAddSig.Clone();
+			
 			HashSetStringInstanceSig = new GenericInstSig(HashSetSig.ToClassOrValueTypeSig(), main.CorLibTypeSig<string>());
 			HashSetStringInstanceReference = HashSetStringInstanceSig.ToTypeDefOrRef();
+			HashSetStringCtor = new MemberRefUser(main.Extensibles, ".ctor", HashSetCtorSig.Clone(), HashSetStringInstanceReference);
 			HashSetStringAdd = new MemberRefUser(main.Extensibles, "Add", HashSetAddSig, HashSetStringInstanceReference);
 			HashSetStringContains = new MemberRefUser(main.Extensibles, "Contains", HashSetContainsSig, HashSetStringInstanceReference);
 
@@ -422,7 +507,13 @@ namespace HookGenExtender.Core.DataStorage {
 			main.Cache.ImportForReferenceAndSignature(typeof(MethodBase), out ITypeDefOrRef methodBaseReference, out TypeSig methodBaseSig);
 			MethodBaseReference = methodBaseReference;
 			MethodBaseSig = methodBaseSig;
-			GetTypeFromHandle = new MemberRefUser(main.Extensibles, "GetTypeFromhandle", MethodSig.CreateStatic(TypeSig, main.Cache.ImportAsTypeSig(typeof(RuntimeTypeHandle))), TypeReference);
+			MethodBaseInvoke = new MemberRefUser(main.Extensibles, "Invoke", MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), main.CorLibTypeSig<object>(), ObjectArray), MethodBaseReference);
+
+			main.Cache.ImportForReferenceAndSignature(typeof(PropertyInfo), out ITypeDefOrRef propertyInfoReference, out TypeSig propertyInfoSig);
+			PropertyInfoReference = propertyInfoReference;
+			PropertyInfoSig = propertyInfoSig;
+
+			GetTypeFromHandle = new MemberRefUser(main.Extensibles, "GetTypeFromHandle", MethodSig.CreateStatic(TypeSig, main.Cache.ImportAsTypeSig(typeof(RuntimeTypeHandle))), TypeReference);
 			GetMethodFromHandle = new MemberRefUser(main.Extensibles, "GetMethodFromHandle", MethodSig.CreateStatic(MethodBaseSig, main.Cache.ImportAsTypeSig(typeof(RuntimeMethodHandle))), MethodBaseReference);
 
 			main.Cache.ImportForReferenceAndSignature(typeof(ConstructorInfo), out ITypeDefOrRef ctorInfoRef, out TypeSig ctorInfoSig);
@@ -430,6 +521,7 @@ namespace HookGenExtender.Core.DataStorage {
 			ConstructorInfoSig = ctorInfoSig;
 			ConstructorInfoArraySig = main.Cache.ImportAsTypeSig(typeof(ConstructorInfo[]));
 			GetConstructors = new MemberRefUser(main.Extensibles, "GetConstructors", MethodSig.CreateInstance(main.Cache.ImportAsTypeSig(typeof(ConstructorInfo[])), BindingFlagsSig), TypeReference);
+			ConstructorInfoInvoke = new MemberRefUser(main.Extensibles, "Invoke", MethodSig.CreateInstance(main.CorLibTypeSig<object>(), ObjectArray), ConstructorInfoReference);
 
 			MethodBase_get_Attributes = new MemberRefUser(main.Extensibles, "get_Attributes", MethodSig.CreateInstance(main.Cache.ImportAsTypeSig(typeof(System.Reflection.MethodAttributes))), MethodBaseReference);
 			Type_get_FullName = new MemberRefUser(main.Extensibles, "get_FullName", MethodSig.CreateInstance(main.CorLibTypeSig<string>()), TypeReference);
@@ -447,6 +539,10 @@ namespace HookGenExtender.Core.DataStorage {
 			GetEqualityMethod(MethodInfoReference, MethodInfoSig, out MemberRef methodInfosEqual, out MemberRef methodInfosNotEqual);
 			MethodInfosEqual = methodInfosEqual;
 			MethodInfosNotEqual = methodInfosNotEqual;
+
+			GetEqualityMethod(PropertyInfoReference, PropertyInfoSig, out MemberRef propertyInfosEqual, out MemberRef propertyInfosNotEqual);
+			PropertyInfosEqual = propertyInfosEqual;
+			PropertyInfosNotEqual = propertyInfosNotEqual;
 
 			GetEqualityMethod(ConstructorInfoReference, ConstructorInfoSig, out MemberRef constructorInfosEqual, out MemberRef constructorInfosNotEqual);
 			ConstructorInfosEqual = constructorInfosEqual;
@@ -466,12 +562,16 @@ namespace HookGenExtender.Core.DataStorage {
 			), TypeReference);
 
 			GetProperty = new MemberRefUser(main.Extensibles, "GetProperty", MethodSig.CreateInstance(
-				PropertyInfoSig
-			), TypeReference)
+				// string, BindingFlags
+				PropertyInfoSig,
+				main.CorLibTypeSig<string>(),
+				BindingFlagsSig
+			), TypeReference);
 
 			GetConstructor = new MemberRefUser(main.Extensibles, "GetConstructor", MethodSig.CreateInstance(
 				// BindingFlags, Binder, Type[], ParameterModifier[]
 				ConstructorInfoSig,
+				BindingFlagsSig,
 				binder,
 				TypeArraySig,
 				paramModArray
@@ -483,11 +583,14 @@ namespace HookGenExtender.Core.DataStorage {
 
 			MissingMemberExceptionType = main.Cache.Import(typeof(MissingMemberException));
 
-			ToStringRef = new MemberRefUser(main.Extensibles, "ToString", MethodSig.CreateInstance(main.CorLibTypeSig<Void>()), main.CorLibTypeRef<object>());
-			StringArray = main.Cache.ImportAsTypeSig(typeof(string[]));
-			ObjectArray = main.Cache.ImportAsTypeSig(typeof(object[]));
+			ToStringReference = new MemberRefUser(main.Extensibles, "ToString", MethodSig.CreateInstance(main.CorLibTypeSig<string>()), main.CorLibTypeRef<object>());
+			GetTypeReference = new MemberRefUser(main.Extensibles, "GetType", MethodSig.CreateInstance(TypeSig), main.CorLibTypeRef<object>());
 
-			UnityDebugLog = new MemberRefUser(main.Extensibles, "Log", MethodSig.CreateStatic(main.CorLibTypeSig<Void>(), main.CorLibTypeSig<object>()), main.Cache.Import(typeof(UnityEngine.Debug)));
+
+			MethodSig unityDebugMethodCommon = MethodSig.CreateStatic(main.CorLibTypeSig<Void>(), main.CorLibTypeSig<object>());
+			ITypeDefOrRef unityDebug = main.Cache.Import(typeof(UnityEngine.Debug));
+			UnityDebugLog = new MemberRefUser(main.Extensibles, "Log", unityDebugMethodCommon, unityDebug);
+			UnityDebugLogWarning = new MemberRefUser(main.Extensibles, "LogWarning", unityDebugMethodCommon, unityDebug);
 
 			main.Cache.ImportForReferenceAndSignature(typeof(Hook), out ITypeDefOrRef hookReference, out TypeSig hookSig);
 			HookReference = hookReference;

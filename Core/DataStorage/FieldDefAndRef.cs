@@ -1,4 +1,5 @@
 ﻿using dnlib.DotNet;
+using HookGenExtender.Core.Utils.MemberMutation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,6 +12,11 @@ namespace HookGenExtender.Core.DataStorage {
 		public CachedTypeDef Owner { get; internal set; }
 
 		public ModuleDef Module { get; }
+
+		/// <summary>
+		/// The <see cref="ExtensiblesGenerator"/> that manages this type.
+		/// </summary>
+		public ExtensiblesGenerator Generator { get; }
 
 		/// <summary>
 		/// The definition of the field.
@@ -33,10 +39,11 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <param name="signature"></param>
 		/// <param name="declaringType"></param>
 		/// <param name="attrs"></param>
-		public FieldDefAndRef(ModuleDef inModule, string name, FieldSig signature, IMemberRefParent declaringType, FieldAttributes attrs) {
-			Module = inModule;
+		public FieldDefAndRef(ExtensiblesGenerator main, string name, FieldSig signature, IMemberRefParent declaringType, FieldAttributes attrs) {
+			Generator = main;
+			Module = main.Extensibles;
 			Definition = new FieldDefUser(name, signature, attrs);
-			Reference = new MemberRefUser(inModule, name, signature, declaringType);
+			Reference = new MemberRefUser(Module, name, signature, declaringType);
 		}
 
 		/// <summary>
@@ -49,10 +56,19 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <param name="signature"></param>
 		/// <param name="declaringType"></param>
 		/// <param name="attrs"></param>
-		public FieldDefAndRef(ModuleDef inModule, FieldDef original, IMemberRefParent declaringType) {
-			Module = inModule;
+		public FieldDefAndRef(ExtensiblesGenerator main, FieldDef original, IMemberRefParent declaringType, bool import) {
+			Generator = main;
+			Module = main.Extensibles;
 			Definition = original;
-			Reference = new MemberRefUser(inModule, original.Name, original.FieldSig, declaringType);
+			FieldSig sig = original.FieldSig;
+			if (import) sig = sig.CloneAndImport(main);
+
+			IMemberRefParent newParent = declaringType;
+			if (import && declaringType is ITypeDefOrRef tdor && tdor.Module != Module) {
+				newParent = main.Cache.Import(tdor) as ITypeDefOrRef;
+			}
+
+			Reference = new MemberRefUser(Module, original.Name, sig, newParent);
 		}
 
 		public override string ToString() {
@@ -60,7 +76,7 @@ namespace HookGenExtender.Core.DataStorage {
 		}
 
 		public FieldDefAndRef AsMemberOfType(IHasTypeDefOrRef type) {
-			return new FieldDefAndRef(Reference.Module, Definition, type.Reference);
+			return new FieldDefAndRef(Generator, Definition, type.Reference, false);
 		}
 
 		IMemberDefAndRef IMemberDefAndRef.AsMemberOfType(IHasTypeDefOrRef type) => AsMemberOfType(type);

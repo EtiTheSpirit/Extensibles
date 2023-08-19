@@ -35,9 +35,14 @@ namespace HookGenExtender.Core.DataStorage {
 		public CachedTypeDef ExtensibleType { get; }
 
 		/// <summary>
-		/// The binder for the <see cref="ExtensibleType"/>.
+		/// The binder for the <see cref="ExtensibleType"/>. This type is non-generic.
 		/// </summary>
 		public CachedTypeDef Binder { get; }
+
+		/// <summary>
+		/// The binder, with its generic parameter set.
+		/// </summary>
+		public GenericInstanceTypeDef GenericBinder { get; }
 
 		public ExtensibleTypeData(TypeDef original, TypeRef originalImported, CachedTypeDef replacement, CachedTypeDef binder) {
 			_originalGameType = original;
@@ -45,6 +50,7 @@ namespace HookGenExtender.Core.DataStorage {
 			ImportedGameTypeSig = originalImported.ToTypeSig();
 			ExtensibleType = replacement;
 			Binder = binder;
+			GenericBinder = binder.MakeGenericType(CommonGenericArgs.TYPE_ARG_0);
 		}
 
 		public override string ToString() {

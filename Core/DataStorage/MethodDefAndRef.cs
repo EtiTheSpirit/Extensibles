@@ -1,5 +1,6 @@
 ﻿using dnlib.DotNet;
 using dnlib.DotNet.Emit;
+using HookGenExtender.Core.Utils.MemberMutation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +23,11 @@ namespace HookGenExtender.Core.DataStorage {
 		/// The name of the method.
 		/// </summary>
 		public string Name => Definition.Name;
+
+		/// <summary>
+		/// The <see cref="ExtensiblesGenerator"/> that manages this type.
+		/// </summary>
+		public ExtensiblesGenerator Generator { get; }
 
 		/// <summary>
 		/// The module this method exists in.
@@ -74,13 +80,15 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <param name="declaringType">The type that this method belongs to.</param>
 		/// <param name="attrs">The method attributes. Notably, this has some overlap with the signature - <strong>do not</strong> set the <see cref="MethodAttributes.Static"/> flag in this value, instead, set <see cref="CallingConventionSig.HasThis"/></param>
 		/// <exception cref="ArgumentException">If <see cref="MethodAttributes.Static"/> is set.</exception>
-		public MethodDefAndRef(ModuleDef inModule, string name, MethodSig signature, IMemberRefParent declaringType, MethodAttributes attrs) {
-			Module = inModule;
+		public MethodDefAndRef(ExtensiblesGenerator main, string name, MethodSig signature, IMemberRefParent declaringType, MethodAttributes attrs) {
+			Generator = main;
+			Module = main.Extensibles;
 			if (attrs.HasFlag(MethodAttributes.Static)) throw new ArgumentException($"For cleanliness, do not declare MethodAttributes.Static in {nameof(attrs)}. Instead, set the HasThis property of {nameof(signature)}");
+			if (!signature.HasThis) attrs |= MethodAttributes.Static;
 			Definition = new MethodDefUser(name, signature, attrs);
 			Definition.IsNoOptimization = true; // TODO: Is this necessary?
 			Definition.IsNoInlining = true; // This is definitely necessary as code flow is *extremely* important to Extensibles.
-			Reference = new MemberRefUser(inModule, name, signature, declaringType);
+			Reference = new MemberRefUser(Module, name, signature, declaringType);
 		}
 		/// <summary>
 		/// Load an existing method, and then make a reference to that method.
@@ -92,10 +100,18 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <param name="original">The original method to store and reference.</param>
 		/// <param name="declaringType">The type that this method belongs to.</param>
 		/// <exception cref="ArgumentException">If <see cref="MethodAttributes.Static"/> is set.</exception>
-		public MethodDefAndRef(ModuleDef inModule, MethodDef original, IMemberRefParent declaringType) {
-			Module = inModule;
+		public MethodDefAndRef(ExtensiblesGenerator main, MethodDef original, IMemberRefParent declaringType, bool import) {
+			Generator = main;
+			Module = main.Extensibles;
 			Definition = original;
-			Reference = new MemberRefUser(inModule, original.Name, original.MethodSig, declaringType);
+			MethodSig sig = original.MethodSig;
+			if (import) sig = sig.CloneAndImport(main);
+
+			IMemberRefParent newParent = declaringType;
+			if (import && declaringType is ITypeDefOrRef tdor && tdor.Module != Module) {
+				newParent = main.Cache.Import(tdor) as ITypeDefOrRef;
+			}
+			Reference = new MemberRefUser(Module, original.Name, sig, newParent);
 		}
 
 		public override string ToString() {
@@ -103,11 +119,11 @@ namespace HookGenExtender.Core.DataStorage {
 		}
 
 		public MethodDefAndRef AsMemberOfType(IHasTypeDefOrRef type) {
-			return new MethodDefAndRef(Reference.Module, Definition, type.Reference);
+			return new MethodDefAndRef(Generator, Definition, type.Reference, false);
 		}
 
 		public MethodDefAndRef AsMemberOfType(ITypeDefOrRef type) {
-			return new MethodDefAndRef(Reference.Module, Definition, type);
+			return new MethodDefAndRef(Generator, Definition, type, false);
 		}
 
 		IMemberDefAndRef IMemberDefAndRef.AsMemberOfType(IHasTypeDefOrRef type) => AsMemberOfType(type);

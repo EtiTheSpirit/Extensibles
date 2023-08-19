@@ -13,6 +13,12 @@ namespace HookGenExtender.Core.DataStorage.ExtremelySpecific.DelegateStuff {
 	/// </summary>
 	public sealed class DelegateTypeDefAndRef : IDelegateTypeWrapper {
 
+
+		/// <summary>
+		/// The <see cref="ExtensiblesGenerator"/> that manages this type.
+		/// </summary>
+		public ExtensiblesGenerator Generator { get; }
+
 		/// <summary>
 		/// A reference to the original delegate type.
 		/// </summary>
@@ -53,9 +59,10 @@ namespace HookGenExtender.Core.DataStorage.ExtremelySpecific.DelegateStuff {
 		/// <param name="invoke"></param>
 		/// <param name="beginInvoke"></param>
 		/// <param name="endInvoke"></param>
-		public DelegateTypeDefAndRef(ModuleDef inModule, TypeDef delegateType, MethodDefAndRef delegateConstructor, MethodDefAndRef invoke, MethodDefAndRef beginInvoke, MethodDefAndRef endInvoke) {
+		public DelegateTypeDefAndRef(ExtensiblesGenerator main, TypeDef delegateType, MethodDefAndRef delegateConstructor, MethodDefAndRef invoke, MethodDefAndRef beginInvoke, MethodDefAndRef endInvoke) {
+			Generator = main;
 			DelegateType = delegateType;
-			CachedDelegateType = new CachedTypeDef(inModule, delegateType);
+			CachedDelegateType = new CachedTypeDef(main, delegateType);
 			Signature = delegateType.ToTypeSig();
 			DelegateSignature = invoke.Definition.MethodSig;
 			Constructor = delegateConstructor;

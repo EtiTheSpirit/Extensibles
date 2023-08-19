@@ -16,8 +16,11 @@ namespace HookGenExtender.Core.ILGeneration {
 		#region Methods (Extensible Class)
 
 		/// <summary>
+		/// <strong>Step 4.3 of the Extensible Type Pipeline:</strong><br/>
 		/// Writes all required members for, as well as the body of, an extensible method proxy.
 		/// This is the member provided in the extensible type that implementors can override to automatically hook.
+		/// <para/>
+		/// This automatically registers the new members.
 		/// </summary>
 		/// <param name="main"></param>
 		/// <param name="coreMembers"></param>
@@ -37,7 +40,11 @@ namespace HookGenExtender.Core.ILGeneration {
 		#region Properties (Extensible Class)
 
 		/// <summary>
+		/// <strong>Step 4.2 of the Extensible Type Pipeline:</strong><br/>
 		/// Writes all required members for, as well as the bodies of, an extensible property's getter and/or setter proxy.
+		/// This is the member provided in the extensible type that implementors can override to automatically hook.
+		/// <para/>
+		/// This automatically registers the new members.
 		/// <para/>
 		/// Unlike its method counterpart, this <em>outputs</em> two <see cref="BepInExHookRef"/>s that can be used in the binder. Pay attention to their nullability.
 		/// </summary>
@@ -51,22 +58,29 @@ namespace HookGenExtender.Core.ILGeneration {
 			BepInExHookRef? setterHook = null;
 			if (originalGameProperty.Getter != null) {
 				getter = MakeExtensiblePropertyAccessorProxy(main, originalGameProperty.Getter, in coreMembers, out BepInExHookRef getterHookV);
+				getter.Value.proxyMethod.Definition.Attributes |= MethodAttributes.SpecialName | MethodAttributes.HideBySig;
 				getterHook = getterHookV;
-			} else {
-				getterHook = default;
 			}
 			if (originalGameProperty.Setter != null) {
 				setter = MakeExtensiblePropertyAccessorProxy(main, originalGameProperty.Setter, in coreMembers, out BepInExHookRef setterHookV);
+				setter.Value.proxyMethod.Definition.Attributes |= MethodAttributes.SpecialName | MethodAttributes.HideBySig;
 				setterHook = setterHookV;
-			} else {
-				setterHook = default;
 			}
 
-			return new ProxyAndHookPackage(getter, setter, getterHook, setterHook);
+			PropertyDefAndRef proxyProperty = new PropertyDefAndRef(
+				main.Extensibles,
+				originalGameProperty.Definition.Name,
+				new PropertySig(true, main.Cache.Import(originalGameProperty.Definition.PropertySig.RetType)),
+				getter?.proxyMethod,
+				setter?.proxyMethod
+			);
+			coreMembers.type.ExtensibleType.AddProperty(proxyProperty);
+
+			return new ProxyAndHookPackage(in getter, in setter, in getterHook, in setterHook, proxyProperty);
 		}
 
 		/// <summary>
-		/// Common routine to make a property proxy.
+		/// Common routine to make a property proxy. This is used by step 4.
 		/// </summary>
 		/// <param name="main"></param>
 		/// <param name="accessor"></param>
@@ -90,7 +104,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			#endregion
 
 			// Register the new delegate type.
-			coreMembers.type.ExtensibleType.AddInnerClass(origDelegateType.CachedDelegateType);
+			origDelegateType.CachedDelegateType.Underlying.DeclaringType2 = coreMembers.type.ExtensibleType.Underlying;
 
 			// Now create the hook reference.
 			hook = new BepInExHookRef(
@@ -113,8 +127,11 @@ namespace HookGenExtender.Core.ILGeneration {
 		#region Fields (Extensible Class)
 
 		/// <summary>
+		/// <strong>Step 4.1 of the Extensible Type Pipeline:</strong><br/>
 		/// Creates a proxy to a field in the extensible type. Proxies are created as ref properties for readable and writable fields.
 		/// Readonly fields are created as standard get-only properties.
+		/// <para/>
+		/// This automatically registers the property.
 		/// </summary>
 		/// <param name="main"></param>
 		/// <param name="original"></param>
@@ -122,10 +139,10 @@ namespace HookGenExtender.Core.ILGeneration {
 			bool isReadOnly = original.Definition.IsInitOnly;
 
 			TypeSig propertyType = main.Cache.Import(original.Definition.FieldType);
-			if (isReadOnly) propertyType = new ByRefSig(propertyType);
+			if (!isReadOnly) propertyType = new ByRefSig(propertyType);
 
 			PropertyDefAndRef prop = new PropertyDefAndRef(
-				main.Extensibles,
+				main,
 				original.Definition.Name,
 				new PropertySig(true, propertyType),
 				type.ExtensibleType.Reference,
@@ -138,7 +155,9 @@ namespace HookGenExtender.Core.ILGeneration {
 			getter.EmitCall(coreMembers.originalObjectProxy.Getter);
 			getter.Emit(isReadOnly ? OpCodes.Ldfld : OpCodes.Ldflda, original.Reference);
 			getter.EmitRet();
-			getter.FinalizeMethodBody();
+			getter.FinalizeMethodBody(main);
+
+			coreMembers.type.ExtensibleType.AddProperty(prop);
 
 			return prop;
 		}
@@ -147,6 +166,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 		/// <summary>
 		/// Code that is common across the methods needed to write method proxies and property proxies, which fundamentally have the same body.
+		/// This is used by Step 4.
 		/// </summary>
 		/// <param name="main"></param>
 		/// <param name="coreMembers"></param>
@@ -155,8 +175,8 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <returns></returns>
 		private static ExtensibleMethodProxyMembers CommonMakeExtensibleProxy(ExtensiblesGenerator main, in ExtensibleCoreMembers coreMembers, MethodDefAndRef originalGameMethod, IDelegateTypeWrapper origDelegateType) {
 			MethodDefAndRef proxyMethod = originalGameMethod.Definition.CloneMethodDeclarationFromGame(main, coreMembers);
-			FieldDefAndRef isCallerInInvocation = new FieldDefAndRef(main.Extensibles, $"<{originalGameMethod.Name}>isCallerInInvocation", new FieldSig(main.CorLibTypeSig<bool>()), coreMembers.type.ExtensibleType.Reference, CommonAttributes.SPECIAL_LOCKED_FIELD);
-			FieldDefAndRef origDelegateRef = new FieldDefAndRef(main.Extensibles, $"<{originalGameMethod.Name}>origDelegateRef", new FieldSig(origDelegateType.Signature), coreMembers.type.ExtensibleType.Reference, CommonAttributes.SPECIAL_LOCKED_FIELD);
+			FieldDefAndRef isCallerInInvocation = new FieldDefAndRef(main, $"<{originalGameMethod.Name}>isCallerInInvocation", new FieldSig(main.CorLibTypeSig<bool>()), coreMembers.type.ExtensibleType.Reference, CommonAttributes.SPECIAL_LOCKED_FIELD);
+			FieldDefAndRef origDelegateRef = new FieldDefAndRef(main, $"<{originalGameMethod.Name}>origDelegateRef", new FieldSig(origDelegateType.Signature), coreMembers.type.ExtensibleType.Reference, CommonAttributes.SPECIAL_LOCKED_FIELD);
 
 			// GOAL:
 			/*
@@ -174,12 +194,12 @@ namespace HookGenExtender.Core.ILGeneration {
 			return del(Original);
 			*/
 
-			int numGameMethods = originalGameMethod.Definition.MethodSig.GetParamCount();
+			int numGameParams = originalGameMethod.Definition.MethodSig.GetParamCount();
 			CilBody proxyBody = proxyMethod.GetOrCreateBody();
 			Local isInManualCall = new Local(main.CorLibTypeSig<bool>(), "isManualCall");
 			proxyBody.SetLocals(isInManualCall);
 
-			Instruction validateDelegateIntegrity_Destination = proxyBody.NewBrDest();
+			Instruction throwMissingDelegateException = proxyBody.NewBrDest();
 			Instruction callOrig_Destination = proxyBody.NewBrDest();
 
 			// if (del == null) {
@@ -187,20 +207,21 @@ namespace HookGenExtender.Core.ILGeneration {
 			proxyBody.EmitNull();
 			proxyBody.Emit(OpCodes.Ceq);
 			proxyBody.EmitStoreThenLoad(isInManualCall);
-			proxyBody.Emit(OpCodes.Brfalse, validateDelegateIntegrity_Destination);
+			proxyBody.Emit(OpCodes.Brfalse, callOrig_Destination); 
+			// above would go to validateDelegateIntegrity_Destination, but it just does another branch with the same result.
 			///////////////////////////////
 
 			// if (!isCallerInInvocation) {
 			proxyBody.EmitLdThisFldAuto(isCallerInInvocation);
-			proxyBody.Emit(OpCodes.Brtrue, validateDelegateIntegrity_Destination);
+			proxyBody.Emit(OpCodes.Brtrue, throwMissingDelegateException);
 			///////////////////////////////
 
 			proxyBody.EmitThis();
 			proxyBody.EmitValue(true);
 			proxyBody.Emit(OpCodes.Stfld, isCallerInInvocation);				// isCallerInInvocation = true
 
-			proxyBody.EmitGetPropAuto(coreMembers.originalObjectProxy);			// this.Original...
-			proxyBody.EmitAllArgs(numGameMethods, 1);					// All args of method
+			proxyBody.EmitGetPropAuto(coreMembers.originalObjectProxy);         // this.Original...
+			proxyBody.EmitAmountOfArgs(numGameParams, 1, false);			// All args of method
 			proxyBody.Emit(OpCodes.Callvirt, originalGameMethod.Reference);		// ... .Method()
 
 			proxyBody.EmitThis();
@@ -210,23 +231,17 @@ namespace HookGenExtender.Core.ILGeneration {
 			proxyBody.EmitRet();
 			// }
 			// }
-			proxyBody.Emit(validateDelegateIntegrity_Destination);
-
-			// if (isManualCall) {
-			proxyBody.EmitLdloc(isInManualCall);
-			proxyBody.Emit(OpCodes.Brfalse, callOrig_Destination);
-			///////////////////////////////
-
+			proxyBody.Emit(throwMissingDelegateException);
 			proxyBody.EmitInvalidOpException(main, $"Illegal state detected. Something called {coreMembers.type}::{originalGameMethod.Name} in an invalid state (this method is already in the process of being called, and was called again by something other than BepInEx's hook system). Did you attempt to run this method in a multi-threaded environment?");
 			// }
 			proxyBody.Emit(callOrig_Destination);
 
-
-			proxyBody.EmitGetPropAuto(coreMembers.originalObjectProxy, false);  // this.Original
-			proxyBody.EmitAllArgs(numGameMethods, 1);                               // All args of method
-			proxyBody.Emit(OpCodes.Call, origDelegateType.Invoke);                          // Call orig(self, ...)
+			proxyBody.EmitLdThisFldAuto(origDelegateRef);									// orig
+			proxyBody.EmitGetPropAuto(coreMembers.originalObjectProxy, false);   // this.Original (arg 0)
+			proxyBody.EmitAmountOfArgs(numGameParams, 1, false);							// All args of method (arg 1, ...)
+			proxyBody.EmitCall(origDelegateType.Invoke);									// Call orig(self, ...)
 			proxyBody.EmitRet();
-			proxyBody.FinalizeMethodBody();
+			proxyBody.FinalizeMethodBody(main);
 
 			coreMembers.type.ExtensibleType.AddMethod(proxyMethod);
 			coreMembers.type.ExtensibleType.AddField(isCallerInInvocation);

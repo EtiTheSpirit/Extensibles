@@ -22,7 +22,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;ASSERT_EXTENSIBLE_TYPES_ARE_SEALED</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Nullable>enable</Nullable>
@@ -92,13 +92,17 @@
     <Compile Include="Core\ILGeneration\ExtendedCILBody.cs" />
     <Compile Include="Core\ILGeneration\ILTools.ObjectRelated.cs" />
     <Compile Include="Core\ILGeneration\ILTools.InstructionRelated.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.BinderConstructors.cs" />
     <Compile Include="Core\ILGeneration\MemberTemplates.BinderHooks.cs" />
     <Compile Include="Core\ILGeneration\MemberTemplates.ExtensibleProxies.cs" />
     <Compile Include="Core\ILGeneration\MemberTemplates.MemberCoding.cs" />
     <Compile Include="Core\ILGeneration\MemberTemplates.MemberDeclaration.cs" />
     <Compile Include="Core\ReferenceHelpers\BepInExTools.cs" />
     <Compile Include="Core\ReferenceHelpers\GeneralTypeTools.cs" />
+    <Compile Include="Core\Utils\DNLib\FixedSigCloneMethods.cs" />
+    <Compile Include="Core\Utils\DNLib\MaxStackCalculatorReimpl.cs" />
     <Compile Include="Core\Utils\Ext\GeneralExtensions.cs" />
+    <Compile Include="Core\Utils\Ext\NameConversion.cs" />
     <Compile Include="Core\Utils\Ext\TypeExtensions.cs" />
     <None Include="HookGenExtenderMain.cs" />
     <None Include="MirrorGenerator.cs" />
@@ -118,7 +122,7 @@
     <None Include="LEGACY\Shared\ReusableSignatureContainer.cs" />
     <None Include="LEGACY\Shared\SharedBinderSignatures.cs" />
     <None Include="LEGACY\Shared\SharedGeneralSignatures.cs" />
-    <None Include="LEGACY\ShittyDocumentationGenerator.cs" />
+    <Compile Include="Core\Utils\ShittyDocumentationGenerator.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".gitattributes" />

@@ -1,6 +1,8 @@
 ﻿using dnlib.DotNet;
 using HookGenExtender.Core.DataStorage;
 using HookGenExtender.Core.DataStorage.BulkMemberStorage;
+using HookGenExtender.Core.ILGeneration;
+using HookGenExtender.Core.Utils.DNLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,29 +26,12 @@ namespace HookGenExtender.Core.Utils.MemberMutation {
 			MethodSig signature = gameOriginalMethod.MethodSig.CloneAndImport(main);
 			MethodAttributes attrs = gameOriginalMethod.Attributes;
 
-			return new MethodDefAndRef(main.Extensibles, name, signature, coreMembers.type.ExtensibleType.Reference, attrs);
-		}
-
-		/// <summary>
-		/// Closely related to <see cref="CloneMethodDeclarationFromGame(MethodDef, ExtensiblesGenerator, in ExtensibleCoreMembers)"/>, this will create an event binding method
-		/// for use in the binder. This is the method that actually gets bound to the BepInEx hook. Unlike the original clone technique, this prepends the signature
-		/// with the delegate type, and a reference to the self-member.
-		/// <para/>
-		/// This excludes custom attributes, and does not copy the body of the method.
-		/// </summary>
-		/// <param name="gameOriginalMethod"></param>
-		/// <param name="main"></param>
-		/// <param name="binderType"></param>
-		/// <param name="origDelegateTypeSig">The <see cref="TypeSig"/> to the <c>orig_*</c> delegate. This must be imported already.</param>
-		/// <returns></returns>
-		public static MethodDefAndRef CloneMethodDeclarationFromGameAsDelegate(this MethodDef gameOriginalMethod, ExtensiblesGenerator main, in ExtensibleBinderCoreMembers binderType, TypeSig origDelegateTypeSig) {
-			string name = gameOriginalMethod.Name;
-			MethodSig signature = gameOriginalMethod.MethodSig.CloneAndImport(main);
-			signature.Params.Insert(0, origDelegateTypeSig);
-			signature.Params.Insert(1, binderType.type.ImportedGameTypeSig);
-			MethodAttributes attrs = gameOriginalMethod.Attributes;
-
-			return new MethodDefAndRef(main.Extensibles, name, signature, binderType.type.Binder.Reference, attrs);
+			MethodDefAndRef result = new MethodDefAndRef(main, name, signature, coreMembers.type.ExtensibleType.Reference, attrs);
+			int paramCount = gameOriginalMethod.GetParamCount();
+			for (int i = 0; i < paramCount; i++) {
+				result.Definition.SetParameterName(i, gameOriginalMethod.GetParameterName(i));
+			}
+			return result;
 		}
 
 		/// <summary>
@@ -55,14 +40,41 @@ namespace HookGenExtender.Core.Utils.MemberMutation {
 		/// <param name="signature"></param>
 		/// <returns></returns>
 		public static MethodSig CloneAndImport(this MethodSig signature, ExtensiblesGenerator main) {
-			// new MethodSig(callingConvention, genParamCount, retType, parameters, paramsAfterSentinel)
-			return new MethodSig(
-				signature.CallingConvention,
-				signature.GenParamCount,
-				main.Cache.Import(signature.RetType),
-				signature.Params.Select(param => main.Cache.Import(param)).ToArray(),
-				signature.ParamsAfterSentinel.Select(param => main.Cache.Import(param)).ToArray()
-			);
+			MethodSig result = signature.DeepClone();
+			result.RetType = main.Cache.Import(signature.RetType);
+			result.Params.Clear();
+			foreach (TypeSig param in signature.Params.Select(param => main.Cache.Import(param))) {
+				result.Params.Add(param);
+			}
+			if (result.ParamsAfterSentinel != null) {
+				result.ParamsAfterSentinel.Clear();
+				foreach (TypeSig param in signature.ParamsAfterSentinel?.Select(param => main.Cache.Import(param))) {
+					result.ParamsAfterSentinel.Add(param);
+				}
+			}
+			return result;
+		}
+
+		public static FieldSig CloneAndImport(this FieldSig signature, ExtensiblesGenerator main) {
+			FieldSig result = signature.Clone();
+			result.Type = main.Cache.Import(signature.Type);
+			return result;
+		}
+
+		public static PropertySig CloneAndImport(this PropertySig signature, ExtensiblesGenerator main) {
+			PropertySig result = signature.DeepClone();
+			result.RetType = main.Cache.Import(signature.RetType);
+			result.Params.Clear();
+			foreach (TypeSig param in signature.Params.Select(param => main.Cache.Import(param))) {
+				result.Params.Add(param);
+			}
+			if (result.ParamsAfterSentinel != null) {
+				result.ParamsAfterSentinel.Clear();
+				foreach (TypeSig param in signature.ParamsAfterSentinel?.Select(param => main.Cache.Import(param))) {
+					result.ParamsAfterSentinel.Add(param);
+				}
+			}
+			return result;
 		}
 
 	}

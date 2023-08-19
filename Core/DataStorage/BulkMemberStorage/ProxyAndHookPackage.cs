@@ -15,7 +15,12 @@ namespace HookGenExtender.Core.DataStorage.BulkMemberStorage {
 		/// <summary>
 		/// If true, this is for a property and thus the property related members should be referenced.
 		/// </summary>
-		public readonly bool isForProperty;
+		public readonly bool IsForProperty => property != null;
+
+		/// <summary>
+		/// The definition of the property, for property hooks.
+		/// </summary>
+		public readonly PropertyDefAndRef property;
 
 		/// <summary>
 		/// The base method members, or the getter members (this is shared).
@@ -45,29 +50,29 @@ namespace HookGenExtender.Core.DataStorage.BulkMemberStorage {
 			}
 		}
 
-		public ExtensibleMethodProxyMembers MethodProxyMembers => !isForProperty ? methodProxyMembers.Value : throw InvalidMode(true);
-		public BepInExHookRef MethodHookMembers => !isForProperty ? methodHook.Value : throw InvalidMode(true);
+		public ExtensibleMethodProxyMembers MethodProxyMembers => !IsForProperty ? methodProxyMembers.Value : throw InvalidMode(true);
+		public BepInExHookRef MethodHookMembers => !IsForProperty ? methodHook.Value : throw InvalidMode(true);
 
-		public ExtensibleMethodProxyMembers? PropertyGetterProxyMembers => isForProperty ? methodProxyMembers : throw InvalidMode(false);
-		public BepInExHookRef? PropertyGetterHookMembers => isForProperty ? methodHook : throw InvalidMode(false);
+		public ExtensibleMethodProxyMembers? PropertyGetterProxyMembers => IsForProperty ? methodProxyMembers : throw InvalidMode(false);
+		public BepInExHookRef? PropertyGetterHookMembers => IsForProperty ? methodHook : throw InvalidMode(false);
 
-		public ExtensibleMethodProxyMembers? PropertySetterProxyMembers => isForProperty ? setterProxyMembers : throw InvalidMode(false);
-		public BepInExHookRef? PropertySetterHookMembers => isForProperty ? setterHook : throw InvalidMode(false);
+		public ExtensibleMethodProxyMembers? PropertySetterProxyMembers => IsForProperty ? setterProxyMembers : throw InvalidMode(false);
+		public BepInExHookRef? PropertySetterHookMembers => IsForProperty ? setterHook : throw InvalidMode(false);
 
 		public ProxyAndHookPackage(in ExtensibleMethodProxyMembers methodProxyMembers, in BepInExHookRef methodHook) {
+			this.property = null;
 			this.methodProxyMembers = methodProxyMembers;
 			this.methodHook = methodHook;
 			this.setterProxyMembers = default;
 			this.setterHook = default;
-			this.isForProperty = false;
 		}
 
-		public ProxyAndHookPackage(in ExtensibleMethodProxyMembers? getterProxyMembers, in ExtensibleMethodProxyMembers? setterProxyMembers, in BepInExHookRef? getterHookMembers, in BepInExHookRef? setterHookMembers) {
+		public ProxyAndHookPackage(in ExtensibleMethodProxyMembers? getterProxyMembers, in ExtensibleMethodProxyMembers? setterProxyMembers, in BepInExHookRef? getterHookMembers, in BepInExHookRef? setterHookMembers, PropertyDefAndRef property) {
+			this.property = property;
 			this.methodProxyMembers = getterProxyMembers;
 			this.methodHook = getterHookMembers;
 			this.setterProxyMembers = setterProxyMembers;
 			this.setterHook = setterHookMembers;
-			this.isForProperty = true;
 		}
 
 	}

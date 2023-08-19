@@ -37,12 +37,18 @@ namespace HookGenExtender.Core.DataStorage.BulkMemberStorage {
 		/// </summary>
 		public readonly GenericInstanceTypeDef weakReferenceType;
 
-		public ExtensibleCoreMembers(ExtensibleTypeData type, MethodDefAndRef constructor, PropertyDefAndRef originalObjectProxy, FieldDefAndRef originalObjectWeakReference, GenericInstanceTypeDef weakReferenceType) {
+		/// <summary>
+		/// A <see cref="WeakReference{T}"/> to the Extensible type.
+		/// </summary>
+		public readonly GenericInstanceTypeDef weakReferenceExtensibleType;
+
+		public ExtensibleCoreMembers(ExtensibleTypeData type, MethodDefAndRef constructor, PropertyDefAndRef originalObjectProxy, FieldDefAndRef originalObjectWeakReference, GenericInstanceTypeDef weakReferenceType, GenericInstanceTypeDef weakReferenceExtensibleType) {
 			this.type = type;
 			this.constructor = constructor;
 			this.originalObjectProxy = originalObjectProxy;
 			this.originalObjectWeakReference = originalObjectWeakReference;
 			this.weakReferenceType = weakReferenceType;
+			this.weakReferenceExtensibleType = weakReferenceExtensibleType;
 		}
 
 	}

@@ -1,4 +1,5 @@
 ﻿using dnlib.DotNet;
+using HookGenExtender.Core.DataStorage;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,30 +8,8 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace HookGenExtender.Utilities {
+namespace HookGenExtender.Core.Utils {
 
-	/// <summary>
-	/// Extend this type to create an object that behaves as if it were an instance of <see cref="object"/>.
-	/// Your type will inherit all methods, properties, and fields of the original type.<para/>
-	/// 
-	/// <strong>IMPORTANT:</strong> You <em>must</em> hook the original type (<see cref="object"/>)'s <c>.ctor</c> and use this Extensible type's <see cref="string"/> Bind method.<para/>
-	/// 
-	/// Fields can <em>not</em> be overridden, as they are proxies. However, certain special rules apply to properties and methods, which <em>can</em> be overridden.
-	/// When you override these properties or methods, they behave as an <strong>extensible hook</strong>.
-	/// Extensible hooks serve both as a proxy to the original game code, and are also a BepInEx <c>On.</c> hook, at the same time.
-	/// This introduces some very specific behavioral rules that you <strong>MUST</strong> pay attention to!
-	/// <list type="bullet">
-	/// <item>
-	/// <term>When used manually...</term>
-	/// <description>Using base.Method() will execute original game code, <em>including</em> mod hooks, but <em>excluding</em> this function<br/>(it won't be called as part of a hook).</description>
-	/// </item>
-	/// <item>
-	/// <term>When called by BepInEx (as a hook)...</term>
-	/// <description>Using base.Method() is identical to what would traditionally be written as <c>orig(self)</c>.</description>
-	/// </item>
-	/// </list>
-	/// This behavior might seem a bit daunting at first. The takeaway is that you just need to focus on writing your code as if you are making a new object. Extensibles abstracts all the complicated hooking jargon away, while still being compatible with other mods.
-	/// </summary>
 	public static class ShittyDocumentationGenerator {
 
 		private const string XML_START = "<?xml version=\"1.0\"?>\n<doc>";
@@ -47,18 +26,17 @@ namespace HookGenExtender.Utilities {
 			xml.AppendLine("</list>");
 		}
 
-		public static void GenerateDocumentation(MirrorGenerator generator, FileInfo toFile) {
+		public static void GenerateDocumentation(ExtensiblesGenerator main, FileInfo toFile) {
 			StringBuilder xml = new StringBuilder(XML_START);
-			xml.AppendFormat("<assembly><name>{0}</name></assembly>\n", generator.MirrorModule.Name);
+			xml.AppendFormat("<assembly><name>{0}</name></assembly>\n", main.Extensibles.Name);
 			xml.AppendLine("<members>");
-			foreach (KeyValuePair<TypeDef, (TypeDefUser, TypeDefUser, TypeRef)> info in generator.mirrorLookup) {
-				(TypeDefUser replacement, TypeDefUser binder, TypeRef imported) = info.Value;
+			foreach (ExtensibleTypeData info in main.GetAllExtensibleTypes()) {
 				// Replacement type:
-				xml.AppendFormat("<member name=\"T:{0}\">", replacement.FullName.Replace("/", "."));
+				xml.AppendFormat("<member name=\"T:{0}\">", info.ExtensibleType.Reference.FullName.Replace("/", "."));
 				xml.AppendLine("<summary>");
-				xml.AppendFormat("Extend this type to create an object that behaves as if it were an instance of <see cref=\"{0}\"/>.\n", imported.FullName);
+				xml.AppendFormat("Extend this type to create an object that behaves as if it were an instance of <see cref=\"{0}\"/>.\n", info._originalGameType.FullName);
 				xml.Append("Your type will inherit all methods, properties, and fields of the original type.<para/>\n\n");
-				xml.AppendFormat("<strong>IMPORTANT:</strong> You <em>must</em> hook the original type (<see cref=\"{0}\"/>)'s <c>.ctor</c> and use this Extensible type's <see cref=\"{1}\">Binder</see>. For more information, check the Binder class stored within this class.<para/>\n\n", imported.FullName, binder.FullName);
+				xml.AppendFormat("<strong>IMPORTANT:</strong> You <em>must</em> hook the original type (<see cref=\"{0}\"/>)'s <c>.ctor</c> and use this Extensible type's <see cref=\"{1}\">Binder</see>. For more information, check the Binder class stored within this class.<para/>\n\n", info.ImportedGameType.FullName, info.Binder.Reference.FullName);
 				xml.AppendLine("Fields can <em>not</em> be overridden, as they are proxies. However, certain special rules apply to properties and methods, which <em>can</em> be overridden.");
 				xml.AppendLine("When you override these properties or methods, they behave as an <strong>extensible hook</strong>. ");
 				xml.AppendLine("Extensible hooks serve both as a proxy to the original game code, and are also a BepInEx <c>On.</c> hook, at the same time. ");
@@ -72,10 +50,10 @@ namespace HookGenExtender.Utilities {
 				xml.AppendLine("</member>");
 
 				// Binder type:
-				xml.AppendFormat("<member name=\"T:{0}\">", binder.FullName.Replace("/", "."));
+				xml.AppendFormat("<member name=\"T:{0}\">", info.Binder.Reference.FullName.Replace("/", "."));
 				xml.AppendLine("<summary>");
 				xml.AppendLine("Every extensible class comes with a <strong>Binder</strong>. The binder's job is to bridge the gap between the game and BepInEx mod hooks, and your special Extensible type.<br/>");
-				xml.AppendFormat("Use the <c>Bind</c> method to tell the system that your instance of <see cref=\"{0}\"/> corresponds to the original instance of <see cref=\"{1}\"/> that you provide to it.<para/>\n\n", replacement.FullName, imported.FullName);
+				xml.AppendFormat("Use the <c>Bind</c> method to tell the system that your instance of <see cref=\"{0}\"/> corresponds to the original instance of <see cref=\"{1}\"/> that you provide to it.<para/>\n\n", info.ExtensibleType.Reference.FullName, info.ImportedGameType.FullName);
 				xml.AppendLine("<strong>IMPORTANT:</strong> You can only bind one instance of your Extensible type to any given instance of the original type at a time! If you try to bind to an object that already has a binding, an exception will be raised. To clean up bindings, use the <c>TryReleaseCurrentBinding</c> method.");
 				xml.AppendLine("</summary>");
 				xml.AppendLine("</member>");

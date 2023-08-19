@@ -39,7 +39,10 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="body"></param>
 		/// <param name="instruction"></param>
 		[DebuggerStepThrough, MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static Instruction Emit(this CilBody body, Instruction instruction) => body.Instructions.Add(instruction);
+		public static Instruction Emit(this CilBody body, Instruction instruction) {
+			body.Instructions.Add(instruction);
+			return instruction;
+		}
 
 		/// <summary>
 		/// Emits <c>ldarg_0</c> (<see langword="this"/>, in instance methods) in a method, for convenience.
@@ -96,16 +99,20 @@ namespace HookGenExtender.Core.ILGeneration {
 		}
 
 		/// <summary>
-		/// Emits ldargs: <c>[startFromArg, numArgs)</c>
+		/// Emits (<paramref name="amount"/>) ldargs instructions, starting at arg (<paramref name="startingFrom"/>) and ending at arg (<paramref name="startingFrom"/> + <paramref name="amount"/>)
 		/// </summary>
 		/// <param name="body"></param>
-		/// <param name="numArgs"></param>
+		/// <param name="amount"></param>
+		/// <param name="amountIsArrayLength">If true, the amount has <paramref name="startingFrom"/> subtracted from it.</param>
 		/// <returns>The first instruction of the generated code, or null if no args were generated.</returns>
-		public static Instruction EmitAllArgs(this CilBody body, int numArgs, int startFromArg = 0) {
+		public static Instruction EmitAmountOfArgs(this CilBody body, int amount, int startingFrom = 0, bool amountIsArrayLength = true) {
 			Instruction first = null;
-			for (int i = startFromArg; i < numArgs; i++) {
-				Instruction ldarg = body.EmitLdarg(i);
+			int argIndex = startingFrom;
+			if (amountIsArrayLength) amount -= startingFrom;
+			for (int i = 0; i < amount; i++) {
+				Instruction ldarg = body.EmitLdarg(argIndex);
 				if (first == null) first = ldarg;
+				argIndex++;
 			}
 			return first;
 		}
@@ -156,6 +163,28 @@ namespace HookGenExtender.Core.ILGeneration {
 			return first ?? second;
 		}
 
+
+
+		/// <summary>
+		/// Emits instructions to throw any exception with the provided message. The exception is imported, but cached.
+		/// If the message is null, it will use a string already on the stack.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <param name="message">A message, or <see langword="null"/> to use a string that is currently on the stack.</param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitException<T>(this CilBody body, ExtensiblesGenerator main, string message) where T : Exception {
+			Instruction first = null;
+
+			main.Shared.DynamicallyImport(typeof(T), out ITypeDefOrRef exceptionRef, out TypeSig exceptionSig);
+			MemberRef ctor = main.Shared.DynamicallyReferenceMethod(exceptionRef, ".ctor", () => MethodSig.CreateInstance(main.CorLibTypeSig(), main.CorLibTypeSig<string>()));
+
+			if (message != null) first = body.Emit(OpCodes.Ldstr, message);
+			Instruction second = body.Emit(OpCodes.Newobj, ctor);
+			body.Emit(OpCodes.Throw);
+			return first ?? second;
+		}
+
 		/// <summary>
 		/// Emits instructions to call <see cref="UnityEngine.Debug.Log"/> with the provided string message.
 		/// <para/>
@@ -167,15 +196,31 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="message">The message to display, or <see langword="null"/> to use the current string on the stack.</param>
 		public static Instruction EmitUnityDbgLog(this CilBody body, ExtensiblesGenerator main, string message) {
 			Instruction first = null;
-			if (message != null) first =body.Emit(OpCodes.Ldstr, message);
+			if (message != null) first = body.Emit(OpCodes.Ldstr, message);
 			Instruction second = body.EmitCall(main.Shared.UnityDebugLog);
+			return first ?? second;
+		}
+
+		/// <summary>
+		/// Emits instructions to call <see cref="UnityEngine.Debug.LogWarning"/> with the provided string message.
+		/// <para/>
+		/// The message can be <see langword="null"/> to use the latest string on the stack instead.
+		/// </summary>
+		/// <returns>The first instruction of the generated code.</returns>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <param name="message">The message to display, or <see langword="null"/> to use the current string on the stack.</param>
+		public static Instruction EmitUnityDbgLogWarning(this CilBody body, ExtensiblesGenerator main, string message) {
+			Instruction first = null;
+			if (message != null) first = body.Emit(OpCodes.Ldstr, message);
+			Instruction second = body.EmitCall(main.Shared.UnityDebugLogWarning);
 			return first ?? second;
 		}
 
 		/// <summary>
 		/// Provide one or more actions that create instructions to load parts of a string. This will follow them with a call to <see cref="string.Concat"/>.
 		/// 
-		/// All provided instructions *must* result in strings.
+		/// All provided instructions should result in strings, but may also result in objects.
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="main"></param>
@@ -186,32 +231,44 @@ namespace HookGenExtender.Core.ILGeneration {
 			int amount = createParts.Length;
 			if (amount == 0) {
 				return body.Emit(OpCodes.Ldstr, string.Empty);
+			} else if (amount == 1) {
+				int index = body.Instructions.Count;
+				createParts[0].Invoke(body, main);
+				if (body.Instructions.Count > index) {
+					// Something actually got emitted.
+					return body.Instructions[index];
+				} else {
+					// Nothing got emitted.
+					return body.Emit(OpCodes.Ldstr, string.Empty);
+				}
 			}
 			Instruction first = null;
 			if (amount <= 4) {
-				foreach (var act in createParts) act.Invoke(body, main);
+				// We can use one of C#'s predefined overloads of string.Concat that accepts 1 to 4 arguments.
+				foreach (var act in createParts) act.Invoke(body, main); // Emit all the stuff the user declared to push the things onto the stack.
 				int index = amount - 1;
-				if (allAreGuaranteedStrings) {
-					MemberRef[] array = allAreGuaranteedStrings ? main.Shared.StringConcatStrings : main.Shared.StringConcatObjects;
-					first = body.EmitCall(array[index]);
-				}
+				MemberRef[] concatMethodCache = allAreGuaranteedStrings ? main.Shared.StringConcatStrings : main.Shared.StringConcatObjects;
+				first = body.EmitCall(concatMethodCache[index]);
 			} else {
-				// This one gets more complicated.
+				// This one gets more complicated, as an array allocation must be performed.
+				ITypeDefOrRef arrayType;
+				// Pick the proper array type.
 				if (allAreGuaranteedStrings) {
-					first = body.Emit(OpCodes.Newarr, main.CorLibTypeSig<string>());
+					arrayType = main.CorLibTypeRef<string>();
 				} else {
-					first = body.Emit(OpCodes.Newarr, main.CorLibTypeSig<object>());
+					arrayType = main.CorLibTypeRef<object>();
 				}
-				body.Emit(OpCodes.Dup);
+				first = body.EmitLdc_I4(amount);			// Load the length of the array.
+				body.Emit(OpCodes.Newarr, arrayType);		// Construct an array of the proper type, push onto stack.
+				body.Emit(OpCodes.Dup);						// Copy the array.
 				for (int i = 0; i < amount; i++) {
 					Action<CilBody, ExtensiblesGenerator> emitInstructions = createParts[i];
-
-					body.EmitLdc_I4(i);
-					emitInstructions.Invoke(body, main);
-					body.Emit(OpCodes.Stelem);
+					body.EmitLdc_I4(i);						// Load current index...
+					emitInstructions.Invoke(body, main);	// Emit instructions provided by user for concat
+					body.Emit(OpCodes.Stelem, arrayType);	// Store element (removes the past 3 stack elements, including the Dup above)
 
 					if (i < amount - 1) {
-						body.Emit(OpCodes.Dup);
+						body.Emit(OpCodes.Dup);				// If it's not the second to last element, duplicate the array on the stack again for ^
 					}
 				}
 				body.EmitCall(allAreGuaranteedStrings ? main.Shared.StringConcatStrings[4] : main.Shared.StringConcatObjects[4]);
@@ -226,7 +283,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="main"></param>
 		/// <returns>The first instruction of the generated code.</returns>
 		public static Instruction EmitTostring(this CilBody body, ExtensiblesGenerator main) {
-			return body.EmitCallvirt(main.Shared.ToStringRef);
+			return body.EmitCallvirt(main.Shared.ToStringReference);
 		}
 
 		/// <summary>
@@ -242,7 +299,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			if (field.Definition.IsStatic) {
 				load = byReference ? OpCodes.Ldsflda : OpCodes.Ldsfld;
 			} else {
-				load = byReference ? OpCodes.Ldfld : OpCodes.Ldflda;
+				load = byReference ? OpCodes.Ldflda : OpCodes.Ldfld;
 				first = body.Emit(OpCodes.Ldarg_0);
 			}
 			Instruction second = body.Emit(load, field.Reference);
@@ -357,13 +414,31 @@ namespace HookGenExtender.Core.ILGeneration {
 			if (name != null) first = body.Emit(OpCodes.Ldstr, name);
 			Instruction second = body.EmitLdc_I4((int)bindingFlags);
 			body.EmitNull();
-			body.EmitArray(main, main.Shared.TypeSig, types.Select<ITypeDefOrRef, Action<CilBody, ExtensiblesGenerator>>(typeRef => {
+			body.EmitArray(main, main.Shared.TypeReference, types.Select<ITypeDefOrRef, Action<CilBody, ExtensiblesGenerator>>(typeRef => {
 				return (CilBody body, ExtensiblesGenerator main) => {
 					body.EmitTypeof(main, typeRef);
 				};
 			}).ToArray());
 			body.EmitNull();
 			body.EmitCallvirt(main.Shared.GetMethod);
+			return first ?? second;
+		}
+
+		/// <summary>
+		/// Emits all the instructions necessary for a call to <see cref="Type.GetProperty(string, BindingFlags)"/>.
+		/// This assumes the type to call it on is already on the stack.
+		/// Leaves behind a <see cref="PropertyInfo"/> on the stack.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <param name="name">The name to load, or null to use the string currently on the stack.</param>
+		/// <param name="bindingFlags"></param>
+		/// <returns>The first instruction of the generated code.</returns>
+		public static Instruction EmitGetProperty(this CilBody body, ExtensiblesGenerator main, string name, BindingFlags bindingFlags) {
+			Instruction first = null;
+			if (name != null) first = body.Emit(OpCodes.Ldstr, name);
+			Instruction second = body.EmitLdc_I4((int)bindingFlags);
+			body.EmitCallvirt(main.Shared.GetProperty);
 			return first ?? second;
 		}
 
@@ -380,7 +455,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		public static Instruction EmitGetConstructor(this CilBody body, ExtensiblesGenerator main, BindingFlags bindingFlags, ITypeDefOrRef[] types) {
 			Instruction first = body.EmitLdc_I4((int)bindingFlags);
 			body.EmitNull();
-			body.EmitArray(main, main.Shared.TypeSig, types.Select<ITypeDefOrRef, Action<CilBody, ExtensiblesGenerator>>(typeRef => {
+			body.EmitArray(main, main.Shared.TypeReference, types.Select<ITypeDefOrRef, Action<CilBody, ExtensiblesGenerator>>(typeRef => {
 				return (CilBody body, ExtensiblesGenerator main) => {
 					body.EmitTypeof(main, typeRef);
 				};
@@ -388,6 +463,16 @@ namespace HookGenExtender.Core.ILGeneration {
 			body.EmitNull();
 			body.EmitCallvirt(main.Shared.GetConstructor);
 			return first;
+		}
+
+		/// <summary>
+		/// Emits <see cref="object.GetType"/> for the object currently on the stack.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="main"></param>
+		/// <returns></returns>
+		public static Instruction EmitGetType(this CilBody body, ExtensiblesGenerator main) {
+			return body.EmitCallvirt(main.Shared.GetTypeReference);
 		}
 
 		/// <summary>
@@ -399,7 +484,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="arrayType"></param>
 		/// <param name="instructionsForObjects"></param>
 		/// <returns>The first instruction of the generated code.</returns>
-		public static Instruction EmitArray(this CilBody body, ExtensiblesGenerator main, TypeSig arrayType, params Action<CilBody, ExtensiblesGenerator>[] instructionsForObjects) {
+		public static Instruction EmitArray(this CilBody body, ExtensiblesGenerator main, ITypeDefOrRef arrayType, params Action<CilBody, ExtensiblesGenerator>[] instructionsForObjects) {
 			int length = instructionsForObjects.Length;
 			Instruction first = body.EmitLdc_I4(length);
 			body.Emit(OpCodes.Newarr, arrayType);
@@ -427,9 +512,10 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="arrayLength"></param>
 		/// <param name="startIndex">The index to start writing at.</param>
 		/// <param name="firstArgIndex">The argument number to start at.</param>
-		/// <param name="assumeArrayAlreadyOnStack">If true, this assumes the array is the current stack element.</param>
+		/// <param name="assumeArrayAlreadyOnStack">If true, this assumes the array is the current stack element. If false, this will construct a new array and use that instead.</param>
+		/// <param name="shouldBoxFunc">This function receives the current argument index and returns whether or not it should be boxed.</param>
 		/// <returns>The first instruction of the generated code, or null if no code was generated for the array.</returns>
-		public static Instruction EmitArrayOfArgs(this CilBody body, ExtensiblesGenerator main, int arrayLength, int startIndex = 0, int firstArgIndex = 0, bool assumeArrayAlreadyOnStack = false) {
+		public static Instruction EmitArrayOfArgs(this CilBody body, ExtensiblesGenerator main, int arrayLength, int startIndex = 0, int firstArgIndex = 0, bool assumeArrayAlreadyOnStack = false, Func<int, (bool, ITypeDefOrRef)> shouldBoxFunc = null) {
 			if (arrayLength < 0) throw new ArgumentOutOfRangeException(nameof(arrayLength), "The length of the array must be greater than or equal to 0.");
 			if (startIndex < 0) throw new ArgumentOutOfRangeException(nameof(startIndex), "Start index must be greater than or equal to 0.");
 			if (firstArgIndex < 0) throw new ArgumentOutOfRangeException(nameof(startIndex), "First argument index must be greater than or equal to 0.");
@@ -439,7 +525,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			Instruction second = null;
 			if (!assumeArrayAlreadyOnStack) {
 				first = body.EmitLdc_I4(arrayLength);
-				body.Emit(OpCodes.Newarr, main.CorLibTypeSig<object>());
+				body.Emit(OpCodes.Newarr, main.CorLibTypeRef<object>());
 			}
 			if (arrayLength == 0) return first;
 
@@ -449,11 +535,18 @@ namespace HookGenExtender.Core.ILGeneration {
 			int argIndex = firstArgIndex;
 			for (int i = startIndex; i < arrayLength; i++) {
 				body.EmitLdc_I4(i);
-				body.EmitLdarg(argIndex++);
-				body.Emit(OpCodes.Stelem, main.CorLibTypeSig<object>());
+				body.EmitLdarg(argIndex);
+				if (shouldBoxFunc != null) {
+					(bool shouldBox, ITypeDefOrRef fromType) = shouldBoxFunc.Invoke(argIndex);
+					if (shouldBox) {
+						body.Emit(OpCodes.Box, fromType);
+					}
+				}
+				body.Emit(OpCodes.Stelem, main.CorLibTypeRef<object>());
 				if (i < arrayLength - 1) {
 					body.EmitDup();
 				}
+				argIndex++;
 			}
 			// Array is left behind on the stack.
 			return first ?? second;
@@ -464,7 +557,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// Your loop code should be placed directly under this. Do not increment <paramref name="countVariable"/> yourself.
 		/// Once your code is written, call <see cref="EmitForLoopTail(CilBody, Local, in Instruction, in Instruction, int)"/> to mark the end/repeat of the loop.
 		/// <para/>
-		/// This line is comparable to this stub: <c>for (<see cref="int"/> <paramref name="countVariable"/> = ...; <paramref name="countVariable"/> &lt; <paramref name="lengthVariable"/>; </c> -- you should set the value of <paramref name="countVariable"/> and <paramref name="lengthVariable"/> before calling this, but do <strong>NOT</strong> need to update them yourself.
+		/// This line is comparable to this stub: <c>for (<paramref name="countVariable"/> = ...; <paramref name="countVariable"/> &lt; <paramref name="lengthVariable"/>; </c> -- you should set the value of <paramref name="countVariable"/> and <paramref name="lengthVariable"/> before calling this, but do <strong>NOT</strong> need to update them yourself.
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="lengthVariable"></param>

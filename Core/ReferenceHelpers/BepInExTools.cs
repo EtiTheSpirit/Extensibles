@@ -3,6 +3,7 @@ using HookGenExtender.Core.DataStorage;
 using HookGenExtender.Core.DataStorage.BulkMemberStorage;
 using HookGenExtender.Core.DataStorage.ExtremelySpecific.DelegateStuff;
 using HookGenExtender.Core.ILGeneration;
+using HookGenExtender.Core.Utils.Ext;
 using HookGenExtender.Core.Utils.MemberMutation;
 using System;
 using System.Collections;
@@ -22,13 +23,13 @@ namespace HookGenExtender.Core.ReferenceHelpers {
 		/// <summary>
 		/// Returns whether or not the provided <paramref name="type"/> has an equivalent <c>On.</c> counterpart in BIE's Hooks module.
 		/// </summary>
-		/// <param name="mirrorGenerator"></param>
+		/// <param name="main"></param>
 		/// <param name="type"></param>
 		/// <returns></returns>
-		public static bool HasBIEHookClass(this TypeDef type, ExtensiblesGenerator mirrorGenerator) {
+		public static bool HasBIEHookClass(this TypeDef type, ExtensiblesGenerator main) {
 			string fullName = type.ReflectionFullName;
 			string hookFullName = "On." + fullName;
-			return mirrorGenerator.BepInExHooksModule.Find(hookFullName, true) != null;
+			return main.BepInExHooksModule.Find(hookFullName, true) != null;
 		}
 
 		/// <summary>
@@ -39,10 +40,10 @@ namespace HookGenExtender.Core.ReferenceHelpers {
 		/// <param name="original">The method that should be hooked.</param>
 		/// <param name="del">Delegate information and references to all members of the delegates.</param>
 		/// <returns>True if a hook exists, false if not.</returns>
-		public static bool TryGetBIEHook(ExtensiblesGenerator main, ExtensibleTypeData gameType, MethodDef original, out BepInExHookRef del) {
+		public static bool TryGetBIEHook(ExtensiblesGenerator main, ExtensibleTypeData gameType, MethodDefAndRef original, out BepInExHookRef del) {
 			// Start by declaring the field storing the original delegate.
 			// To do this, acquire the hook type and the corresponding delegate.
-			string fullName = original.DeclaringType.ReflectionFullName;
+			string fullName = original.Definition.DeclaringType.ReflectionFullName;
 			string hookFullName = "On." + fullName;
 			TypeDef hookClassDef = main.BepInExHooksModule.Find(hookFullName, true);
 			if (hookClassDef == null) {
@@ -54,6 +55,17 @@ namespace HookGenExtender.Core.ReferenceHelpers {
 				return false;
 			}
 			return true;
+		}
+
+		private static string BuildSignatureName(ExtensiblesGenerator main, MethodSig methodSignature) {
+			string result = "";
+			int count = methodSignature.Params.Count;
+			for (int i = 0; i < count; i++) {
+				result += "_";
+				TypeSig sig = methodSignature.Params[i];
+				result += NameConversion.NameOfType(sig);
+			}
+			return result;
 		}
 
 		/// <summary>
@@ -75,41 +87,20 @@ namespace HookGenExtender.Core.ReferenceHelpers {
 			string methodName = originalMethod.Name.Replace(".", "_"); // The replacement of . to _ accounts for interface implementations.
 			string origName = $"orig_{methodName}";
 			string hookName = $"hook_{methodName}";
-			IEnumerable<TypeDef> types = hookType.NestedTypes.Where(type => type.IsDelegate && type.Name.StartsWith(origName));
 
-			TypeDef origDelType = null;
-			TypeDef hookDelType = null;
-			if (types.Count() == 1) {
-				origDelType = types.First();
-				hookDelType = hookType.NestedTypes.First(t => t.Name == hookName);
-			} else {
-				// Need to match by parameters.
-				originalMethod.Definition.SelectParameters(main, out TypeSig[] methodParameters, out _, out _, false);
-				foreach (TypeDef candidateDel in types) {
-					candidateDel.FindMethod("Invoke").SelectParameters(main, out TypeSig[] inputParameters, out TypeSig retnParam, out _, false);
-					IEnumerable<TypeSig> inputParametersAdjusted = inputParameters.Skip(1); // Skips "self".
+			string nameSig = BuildSignatureName(main, originalMethod.Definition.MethodSig);
+			string methodNameWithSig = methodName + nameSig;
+			string origNameWithSig = origName + nameSig;
+			string hookNameWithSig = hookName + nameSig;
 
-					if (inputParametersAdjusted.SequenceEqual(methodParameters, TypeSignatureComparer.Instance)) {
-						origDelType = candidateDel;
-
-						// Now update the strings too:
-						origName = origDelType.Name;
-						methodName = origName.Substring(5);
-						hookName = "hook_" + methodName;
-
-						// And find this now:
-						hookDelType = hookType.NestedTypes.First(t => t.Name == hookName);
-						break;
-					}
-				}
-				if (origDelType == null) {
-					Debugger.Break();
-					data = default;
-					return false;
-				}
+			TypeDef origDelType = GetFirstApplicableType(hookType.NestedTypes, origNameWithSig, origName);
+			TypeDef hookDelType = GetFirstApplicableType(hookType.NestedTypes, hookNameWithSig, hookName);
+			if (origDelType == null || hookDelType == null) {
+				data = default;
+				return false;
 			}
 
-			EventDef hookEvt = hookType.FindEvent(methodName);
+			EventDef hookEvt = hookType.FindEvent(methodNameWithSig) ?? hookType.FindEvent(methodName);
 			if (hookEvt == null) {
 				Debugger.Break();
 				data = default;
@@ -123,10 +114,14 @@ namespace HookGenExtender.Core.ReferenceHelpers {
 				ILTools.ReferenceDelegateType(main, hookDelType),
 				originalMethod.Definition.MethodSig.CloneAndImport(main),
 				hookEvt,
-				new MethodDefAndRef(main.Extensibles, hookEvt.AddMethod, hookType),
-				new MethodDefAndRef(main.Extensibles, hookEvt.RemoveMethod, hookType)
+				new MethodDefAndRef(main, hookEvt.AddMethod, hookType, true),
+				new MethodDefAndRef(main, hookEvt.RemoveMethod, hookType, true)
 			);
 			return true;
+		}
+
+		private static TypeDef GetFirstApplicableType(IEnumerable<TypeDef> types, string preciseName, string generalName) {
+			return types.FirstOrDefault(t => t.Name == preciseName) ?? types.FirstOrDefault(t => t.Name == generalName);
 		}
 
 		private class TypeSignatureComparer : IEqualityComparer<TypeSig> {

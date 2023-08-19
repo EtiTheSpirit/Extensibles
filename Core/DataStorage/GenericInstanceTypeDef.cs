@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,6 +12,11 @@ namespace HookGenExtender.Core.DataStorage {
 	/// A soft-instance of a generic type with an assigned generic type signature.
 	/// </summary>
 	public sealed class GenericInstanceTypeDef : IHasTypeDefOrRef {
+
+		/// <summary>
+		/// The <see cref="ExtensiblesGenerator"/> that manages this type.
+		/// </summary>
+		public ExtensiblesGenerator Generator { get; }
 
 		/// <summary>
 		/// The underlying type without its generic parameters set.
@@ -39,7 +45,8 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		public FieldSig FieldSignature => new FieldSig(Signature);
 
-		public GenericInstanceTypeDef(ITypeDefOrRef definition, params TypeSig[] types) {
+		public GenericInstanceTypeDef(ExtensiblesGenerator main, ITypeDefOrRef definition, params TypeSig[] types) {
+			Generator = main;
 			NonGeneric = definition;
 			GenericParameterTypes = types.ToList().AsReadOnly();
 			Signature = new GenericInstSig(definition.ToTypeSig().ToClassOrValueTypeSig(), types.ToArray());
@@ -55,7 +62,7 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <returns></returns>
 		public FieldDefAndRef CreateFieldOfThisType(string name, FieldAttributes attributes, IMemberRefParent owner) {
 			FieldDef definition = new FieldDefUser(name, FieldSignature, attributes);
-			return new FieldDefAndRef(NonGeneric.Module, definition, owner ?? Reference);
+			return new FieldDefAndRef(Generator, definition, owner ?? Reference, false);
 		}
 
 		/// <summary>

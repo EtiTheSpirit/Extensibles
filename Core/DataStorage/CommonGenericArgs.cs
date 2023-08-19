@@ -16,11 +16,11 @@ namespace HookGenExtender.Core.DataStorage {
 		public static readonly GenericVar TYPE_ARG_2 = new GenericVar(2);
 
 		/// <summary><c>&amp;!0</c></summary>
-		public static readonly ByRefSig REF_TYPE_ARG_0 = new ByRefSig(TYPE_ARG_0);
+		public static readonly ByRefSig BYREF_TYPE_ARG_0 = new ByRefSig(TYPE_ARG_0);
 		/// <summary><c>&amp;!1</c></summary>
-		public static readonly ByRefSig REF_TYPE_ARG_1 = new ByRefSig(TYPE_ARG_1);
+		public static readonly ByRefSig BYREF_TYPE_ARG_1 = new ByRefSig(TYPE_ARG_1);
 		/// <summary><c>&amp;!2</c></summary>
-		public static readonly ByRefSig REF_TYPE_ARG_2 = new ByRefSig(TYPE_ARG_2);
+		public static readonly ByRefSig BYREF_TYPE_ARG_2 = new ByRefSig(TYPE_ARG_2);
 
 		/// <summary><c>!!0</c> represents the first generic argument of the method that is being called.</summary>
 		public static readonly GenericMVar METHOD_ARG_0 = new GenericMVar(0);

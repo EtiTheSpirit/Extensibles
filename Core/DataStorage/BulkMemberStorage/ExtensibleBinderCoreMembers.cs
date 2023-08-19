@@ -19,6 +19,11 @@ namespace HookGenExtender.Core.DataStorage.BulkMemberStorage {
 		public readonly FieldDefAndRef bindingsField;
 
 		/// <summary>
+		/// A declaration and reference to <c>&lt;Binder&gt;constructorCache</c>
+		/// </summary>
+		public readonly FieldDefAndRef constructorCacheField;
+
+		/// <summary>
 		/// A declaration and reference to the <c>&lt;Binder&gt;hasCreatedBindings</c> field.
 		/// </summary>
 		public readonly FieldDefAndRef hasCreatedBindingsField;
@@ -43,10 +48,11 @@ namespace HookGenExtender.Core.DataStorage.BulkMemberStorage {
 		/// </summary>
 		public readonly GenericInstanceTypeDef cwtInstanceDef;
 
-		public ExtensibleBinderCoreMembers(ExtensibleTypeData type, FieldDefAndRef bindingsField, FieldDefAndRef hasCreatedBindingsField, MethodDefAndRef createBindingsMethod, MethodDefAndRef tryGetBindingMethod, MethodDefAndRef tryReleaseBindingMethod, GenericInstanceTypeDef cwtInstanceDef) {
+		public ExtensibleBinderCoreMembers(ExtensibleTypeData type, FieldDefAndRef bindingsField, FieldDefAndRef hasCreatedBindingsField, FieldDefAndRef constructorCacheField, MethodDefAndRef createBindingsMethod, MethodDefAndRef tryGetBindingMethod, MethodDefAndRef tryReleaseBindingMethod, GenericInstanceTypeDef cwtInstanceDef) {
 			this.type = type;
 			this.bindingsField = bindingsField;
 			this.hasCreatedBindingsField = hasCreatedBindingsField;
+			this.constructorCacheField = constructorCacheField;
 			this.createBindingsMethod = createBindingsMethod;
 			this.tryGetBindingMethod = tryGetBindingMethod;
 			this.tryReleaseBindingMethod = tryReleaseBindingMethod;

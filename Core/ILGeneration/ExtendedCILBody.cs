@@ -1,11 +1,14 @@
-﻿using dnlib.DotNet.Emit;
+﻿using dnlib.DotNet;
+using dnlib.DotNet.Emit;
 using HookGenExtender.Core.DataStorage;
+using HookGenExtender.Core.Utils.Debugging;
 using HookGenExtender.Core.Utils.Ext;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace HookGenExtender.Core.ILGeneration {
 
@@ -59,13 +62,21 @@ namespace HookGenExtender.Core.ILGeneration {
 			List<int> allDestsInstructionIndices = allDests.Select(instruction => body.Instructions.IndexOf(instruction)).ToList();
 
 			List<Instruction> garbage = new List<Instruction>();
+			//Dictionary<Instruction, List<Instruction>> jumpDestsToOriginal = new Dictionary<Instruction, List<Instruction>>();
 			foreach (Instruction jump in jumps) { 
 				// Below: Use a while loop instead of an if statement.
 				// This addresses an edge case where a jump destination immediately follows another.
 				// Without the while loop, it would leave some branches without a destination as the instruction gets deleted.
 				while (jump.Operand is Instruction jumpDest && jumpDest.IsBrDestNop()) {
 					garbage.Add(jumpDest);
-					if (body.Instructions.TryGetElementAfter(jump, out Instruction nextDest)) {
+					/*
+					if (!jumpDestsToOriginal.TryGetValue(jumpDest, out List<Instruction> jumpDestinations)) {
+						jumpDestinations = new List<Instruction>();
+						jumpDestsToOriginal[jumpDest] = jumpDestinations;
+					}
+					jumpDestinations.Add(jump);
+					*/
+					if (body.Instructions.TryGetElementAfter(jumpDest, out Instruction nextDest)) {
 						jump.Operand = nextDest;
 					} else {
 						// There's nothing after this nop. This is invalid. This method should only be called when the function is done, which means
@@ -77,10 +88,12 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			// Now I can clear out the garbage ones.
 			foreach (Instruction jumpDest in garbage) {
-				body.Instructions.Remove(jumpDest);
-				int index = allDests.IndexOf(jumpDest);
-				allDests.RemoveAt(index);
-				allDestsInstructionIndices.RemoveAt(index);
+				bool removed = body.Instructions.Remove(jumpDest);
+				if (removed) {
+					int index = allDests.IndexOf(jumpDest);
+					allDests.RemoveAt(index);
+					allDestsInstructionIndices.RemoveAt(index);
+				} // Won't be removed if two jumps share a destination.
 			}
 
 			// Now check for strays:
@@ -103,19 +116,33 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// In the provided order, this calls:
 		/// <list type="number">
 		/// <item><see cref="BakeDefRefsDown(CilBody)"/></item>
-		/// <item><see cref="OptimizeNopJumps(CilBody)"/></item>
+		/// <item><see cref="OptimizeNopJumps(CilBody, bool)"/></item>
 		/// <item><see cref="CilBody.OptimizeBranches()"/></item>
 		/// <item><see cref="CilBody.OptimizeMacros()"/></item>
 		/// <item><see cref="CilBody.UpdateInstructionOffsets()"/></item>
 		/// </list>
+		/// Then this will verify the stack of the method, raising an exception for any mistakes in a manner that should make debugging much, <em>much</em> easier
+		/// than what DNLib provides by default.
 		/// </summary>
 		/// <param name="body"></param>
-		public static void FinalizeMethodBody(this CilBody body) {
+		public static void FinalizeMethodBody(this CilBody body, ExtensiblesGenerator main) {
 			body.BakeDefRefsDown();
-			body.OptimizeNopJumps();
 			body.OptimizeBranches();
 			body.OptimizeMacros();
 			body.UpdateInstructionOffsets();
+			body.OptimizeNopJumps();
+			body.UpdateInstructionOffsets();
+			foreach (Instruction i in body.Instructions) {
+				if (i.Operand is IMemberDef mbrDef) {
+					if (mbrDef.Module != main.Extensibles) throw new InvalidOperationException("You are using the definition of another module's member!");
+				} else if (i.Operand is TypeDef typeDef) {
+					if (typeDef.Module != main.Extensibles) throw new InvalidOperationException("You are using the definition of another module's type!");
+				}
+			}
+
+			MaxStackCalculatorReimpl calc = MaxStackCalculatorReimpl.Create();
+			calc.Reset(body.Instructions, body.ExceptionHandlers);
+			calc.Calculate(out uint _);
 		}
 
 	}

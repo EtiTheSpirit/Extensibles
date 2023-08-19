@@ -4,10 +4,12 @@ using HookGenExtender.Core.DataStorage;
 using HookGenExtender.Core.DataStorage.BulkMemberStorage;
 using HookGenExtender.Core.ILGeneration;
 using HookGenExtender.Core.ReferenceHelpers;
+using HookGenExtender.Core.Utils;
 using HookGenExtender.Core.Utils.Ext;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -73,7 +75,6 @@ namespace HookGenExtender.Core {
 		/// </summary>
 		public Func<IMemberRef, bool> IsPropertyAllowedCallback { get; set; } = _ => true;
 
-		private readonly AssemblyDef _asm;
 
 		/// <summary>
 		/// A cache for imported types.
@@ -84,6 +85,12 @@ namespace HookGenExtender.Core {
 		/// Commonly used types that are common across many pieces of the code.
 		/// </summary>
 		public SharedTypes Shared { get; }
+
+
+		private readonly AssemblyDef _asm;
+		private readonly Dictionary<TypeDef, ExtensibleTypeData> _extensibleLookup = new Dictionary<TypeDef, ExtensibleTypeData>();
+		private readonly Dictionary<CachedTypeDef, ExtensibleTypeData> _extensibleLookupByCached = new Dictionary<CachedTypeDef, ExtensibleTypeData>();
+		private bool _generated = false;
 
 		/// <summary>
 		/// Create a new generator.
@@ -113,11 +120,32 @@ namespace HookGenExtender.Core {
 			Shared = new SharedTypes(this);
 		}
 
+		public IEnumerable<ExtensibleTypeData> GetAllExtensibleTypes() {
+			return _extensibleLookup.Values;
+		}
+
+		/// <summary>
+		/// Attempts to get the parent of the provided <see cref="ExtensibleTypeData"/>. The parent is its base type in
+		/// <see cref="ExtensibleTypeData"/> form.
+		/// </summary>
+		/// <param name="inputType"></param>
+		/// <param name="parent"></param>
+		/// <returns></returns>
+		internal bool TryGetParent(ExtensibleTypeData inputType, out ExtensibleTypeData parent) {
+			if (inputType.ExtensibleType.Base is CachedTypeDef ctd) {
+				return _extensibleLookupByCached.TryGetValue(ctd, out parent);
+
+			}
+			parent = null;
+			return false;
+		}
+
 		public void Generate() {
-			// For the record, I know that doing this in three loops is kinda shit and wasteful.
+			if (_generated) throw new InvalidOperationException("This has already been generated before.");
+			_generated = true;
 
 			Stopwatch sw = new Stopwatch();
-			Console.WriteLine("Pre-generating all types and generating cache...");
+			Console.WriteLine("Pre-generating all types and generating cache... This will take a moment.");
 			Console.CursorTop--;
 			TypeDef[] allTypes = Original.GetTypes().ToArray();
 			int current = 0;
@@ -126,20 +154,19 @@ namespace HookGenExtender.Core {
 			int elapsed = 0;
 			sw.Start();
 
-			Dictionary<TypeDef, ExtensibleTypeData> extensibleLookup = new Dictionary<TypeDef, ExtensibleTypeData>();
 			foreach (TypeDef def in allTypes) {
 				current++;
 				if (!IsTypeAllowedCallback(def)) continue;
 				if (def.IsGlobalModuleType) continue;
 				if (def.IsDelegate) continue;
 				if (def.IsEnum) continue;
+				if (def.IsValueType) continue;
 				if (def.IsForwarder) continue;
 				if (def.IsInterface) continue;
 				if (def.IsPrimitive) continue;
 				if (def.IsSpecialName) continue;
 				if (def.IsRuntimeSpecialName) continue;
 				if (def.IsStatic()) continue;
-				//if (def.Name.StartsWith("<")) continue; // TODO: Better version of this.
 				if (def.IsCompilerGenerated()) continue;
 				if (def.Namespace.StartsWith("Microsoft.CodeAnalysis")) continue;
 				if (def.Namespace.StartsWith("System.")) continue;
@@ -149,21 +176,22 @@ namespace HookGenExtender.Core {
 				if (ns != null && ns.Length > 0) {
 					ns = '.' + ns;
 				}
-				CachedTypeDef replacement = new CachedTypeDef(Extensibles, $"Extensibles{ns}", def.Name, TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class | TypeAttributes.AutoLayout | TypeAttributes.AnsiClass);
+				CachedTypeDef replacement = new CachedTypeDef(this, $"Extensible{ns}", def.Name, TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class | TypeAttributes.AutoLayout | TypeAttributes.AnsiClass);
 				
-				CachedTypeDef binder = new CachedTypeDef(Extensibles, "Binder`1", TypeAttributes.Sealed | TypeAttributes.Abstract | TypeAttributes.NestedPublic | TypeAttributes.AutoLayout | TypeAttributes.AnsiClass);
+				CachedTypeDef binder = new CachedTypeDef(this, "Binder`1", TypeAttributes.Sealed | TypeAttributes.Abstract | TypeAttributes.NestedPublic | TypeAttributes.AutoLayout | TypeAttributes.AnsiClass);
 				GenericParam binderGeneric = new GenericParamUser(0, GenericParamAttributes.NonVariant, "TExtensible");
 				binderGeneric.GenericParamConstraints.Add(new GenericParamConstraintUser(replacement.Reference));
 				binder.GenericParameters.Add(binderGeneric);
 
-				replacement.AddInnerClass(binder);
+				binder.Underlying.DeclaringType2 = replacement.Underlying;
 
-				extensibleLookup[def] = new ExtensibleTypeData(def, Cache.Import(def), replacement, binder);
+				_extensibleLookup[def] = new ExtensibleTypeData(def, Cache.Import(def), replacement, binder);
+				_extensibleLookupByCached[replacement] = _extensibleLookup[def];
 
 				real++;
 
 				if (current == 0) {
-					Console.WriteLine("                                                ");
+					Console.WriteLine(new string(' ', Console.BufferWidth));
 					Console.CursorTop--;
 				}
 				if (current % 100 == 0) {
@@ -174,6 +202,7 @@ namespace HookGenExtender.Core {
 			sw.Stop();
 			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
 			elapsed = time;
+			Console.WriteLine(new string(' ', Console.BufferWidth));
 			Console.WriteLine($"Pre-generating all types ({current} of {allTypes.Length}, skipped {current - real}...) took {time} seconds.");
 
 			Console.WriteLine("Binding type inheritence...");
@@ -181,19 +210,19 @@ namespace HookGenExtender.Core {
 			current = 0;
 
 			sw.Restart();
-			foreach (KeyValuePair<TypeDef, ExtensibleTypeData> binding in extensibleLookup) {
+			foreach (KeyValuePair<TypeDef, ExtensibleTypeData> binding in _extensibleLookup) {
 				TypeDef gameOriginal = binding.Key;
 				ExtensibleTypeData replacement = binding.Value;
 				foreach (TypeDef nested in binding.Key.NestedTypes) {
-					if (extensibleLookup.TryGetValue(nested, out ExtensibleTypeData nestedCustomType)) {
-						replacement.ExtensibleType.AddInnerClass(nestedCustomType.ExtensibleType);
+					if (_extensibleLookup.TryGetValue(nested, out ExtensibleTypeData nestedCustomType)) {
+						nestedCustomType.ExtensibleType.Underlying.DeclaringType2 = replacement.ExtensibleType.Underlying;
 					}
 				}
 				if (gameOriginal.BaseType != null && !gameOriginal.BaseType.IsCorLibType()) {
 					TypeDef gameOriginalBaseType = gameOriginal.BaseType.ResolveTypeDef();
 					if (gameOriginalBaseType != null) {
-						if (extensibleLookup.TryGetValue(gameOriginalBaseType, out ExtensibleTypeData replacementBaseType)) {
-							replacementBaseType.ExtensibleType.AddChildType(replacement.ExtensibleType);
+						if (_extensibleLookup.TryGetValue(gameOriginalBaseType, out ExtensibleTypeData replacementBaseType)) {
+							replacement.ExtensibleType.SetBase(replacementBaseType.ExtensibleType);
 						}
 					}
 				}
@@ -214,18 +243,28 @@ namespace HookGenExtender.Core {
 			current = 0;
 
 			sw.Restart();
-			foreach (KeyValuePair<TypeDef, ExtensibleTypeData> binding in extensibleLookup) {
-				MakeExtensibleTypeProcedure(binding.Value);
+			Dictionary<ExtensibleTypeData, (ExtensibleCoreMembers, ExtensibleBinderCoreMembers)> lookup = new Dictionary<ExtensibleTypeData, (ExtensibleCoreMembers, ExtensibleBinderCoreMembers)>();
+			foreach (KeyValuePair<TypeDef, ExtensibleTypeData> binding in _extensibleLookup) {
+				MakeExtensibleTypeProcedure(binding.Value, lookup);
 				current++;
 				if (current % 100 == 0) {
-					Console.WriteLine($"Generating type contents ({current} of {real}... // This step might take a while...)");
+					Console.WriteLine($"Generating type contents ({current} of {real}...)");
+					Console.CursorTop--;
+				}
+			}
+			current = 0;
+			foreach (KeyValuePair<TypeDef, ExtensibleTypeData> binding in _extensibleLookup) {
+				FinalizeMakeExtensibleTypeProcedure(lookup[binding.Value], binding.Value);
+				current++;
+				if (current % 100 == 0) {
+					Console.WriteLine($"Generating type contents (Pass 2) ({current} of {real}...)");
 					Console.CursorTop--;
 				}
 			}
 			sw.Stop();
 			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
 			elapsed += time;
-			Console.WriteLine($"Generating type contents ({current} of {real}... // This step might take a while...) took {time} seconds.");
+			Console.WriteLine($"Generating type contents ({current} of {real}...) took {time} seconds.               ");
 
 			ITypeDefOrRef asmFileVerAttr = Cache.Import(typeof(System.Reflection.AssemblyVersionAttribute));
 			MemberRefUser fileVerCtor = new MemberRefUser(Extensibles, ".ctor", MethodSig.CreateInstance(CorLibTypeSig(), CorLibTypeSig<string>()), asmFileVerAttr);
@@ -242,14 +281,57 @@ namespace HookGenExtender.Core {
 			Console.WriteLine($"Done processing! Took {elapsed} seconds.");
 		}
 
-		private void MakeExtensibleTypeProcedure(ExtensibleTypeData of) {
-			ExtensibleCoreMembers coreMembers = MemberTemplates.MakeExtensibleCoreMembers(this, of);
-			ExtensibleBinderCoreMembers binderMembers = MemberTemplates.MakeBinderCoreMembers(this, of);
+		public void Save(FileInfo to, FileInfo documentation = null) {
 
-			BindFieldMirrors(of, in coreMembers);
+			// TO FUTURE XAN/MAINTAINERS:
+			// For *some reason*, this value here (added by the custom attribute) is used when loading the assembly from file to do a version check.
+
+			// For *some other reason*, this is not, but without it, tools like DNSpy see the default 1.0.0.0 version.
+
+
+			Console.WriteLine("Saving to disk...");
+			if (to.Exists) to.Delete();
+			using FileStream stream = to.Open(FileMode.CreateNew);
+
+			_asm.Write(stream);
+
+			if (documentation != null) {
+				Console.WriteLine("Saving and generating minimal docs...");
+				ShittyDocumentationGenerator.GenerateDocumentation(this, documentation);
+			}
+
+			Console.WriteLine($"Done! {to.Name} has been written to {to.Directory.FullName} and is ready for use.");
 		}
 
+		private void MakeExtensibleTypeProcedure(ExtensibleTypeData of, Dictionary<ExtensibleTypeData, (ExtensibleCoreMembers, ExtensibleBinderCoreMembers)> lookup) {
+			ExtensibleCoreMembers coreMembers = MemberTemplates.MakeExtensibleCoreMembers(this, of);
+			ExtensibleBinderCoreMembers binderMembers = MemberTemplates.MakeBinderCoreMembers(this, of);
+			MemberTemplates.InitializeCreateBindingsMethod(this, in binderMembers);
 
+			BindFieldMirrors(of, in coreMembers);
+			BindPropertyMirrors(of, in coreMembers, in binderMembers);
+			BindMethodMirrors(of, in coreMembers, in binderMembers);
+
+			MakeBinderBindMethods(of, in coreMembers, in binderMembers);
+
+			// CAN NOT CALL HERE.
+			// MemberTemplates.FinalizeCreateHooksMethod(this, in coreMembers, in binderMembers);
+			lookup.Add(of, (coreMembers, binderMembers));
+		}
+
+		private void FinalizeMakeExtensibleTypeProcedure((ExtensibleCoreMembers, ExtensibleBinderCoreMembers) data, ExtensibleTypeData binding) {
+			MemberTemplates.FinalizeCreateBindingsMethod(this, in data.Item1, in data.Item2);
+			MemberTemplates.MakeImplicitCasts(this, binding, binding);
+		}
+
+		private void MakeBinderBindMethods(ExtensibleTypeData extensible, in ExtensibleCoreMembers coreMembers, in ExtensibleBinderCoreMembers binderMembers) {
+			MemberTemplates.MakeBindMethodFromCommonConstructor(this, in coreMembers, in binderMembers);
+			int currentIndex = 1;
+			foreach (MethodDef constructor in extensible._originalGameType.FindInstanceConstructors()) {
+				MethodDefAndRef ctorRef = new MethodDefAndRef(this, constructor, extensible.ImportedGameType, true);
+				MemberTemplates.MakeBindMethodFromConstructor(this, ctorRef, currentIndex++, in coreMembers, in binderMembers);
+			}
+		}
 
 		private void BindFieldMirrors(ExtensibleTypeData extensible, in ExtensibleCoreMembers coreMembers) {
 			foreach (FieldDef field in extensible._originalGameType.Fields) {
@@ -258,8 +340,7 @@ namespace HookGenExtender.Core {
 				if (field.IsCompilerGenerated()) continue;
 				if (!IsFieldAllowedCallback(field)) continue;
 
-				PropertyDefAndRef prop = MemberTemplates.MakeExtensibleFieldProxy(this, in coreMembers, extensible, new FieldDefAndRef(Extensibles, field, extensible.ImportedGameType));
-				extensible.ExtensibleType.AddProperty(prop);
+				MemberTemplates.MakeExtensibleFieldProxy(this, in coreMembers, extensible, new FieldDefAndRef(this, field, extensible.ImportedGameType, true));
 			}
 		}
 
@@ -268,6 +349,20 @@ namespace HookGenExtender.Core {
 				if (property.IsStatic()) continue;
 				if (property.IsCompilerGenerated()) continue;
 				if (!IsPropertyAllowedCallback(property)) continue;
+				PropertyDefAndRef propertyInstance = new PropertyDefAndRef(this, property, extensible.ImportedGameType, true);
+
+				ProxyAndHookPackage proxyAndHook = MemberTemplates.MakeExtensiblePropertyProxies(this, propertyInstance, in coreMembers);
+				// PropertyDefAndRef proxyProperty = proxyAndHook.property;
+				(MethodDefAndRef extBinderGetter, MethodDefAndRef extBinderSetter) = MemberTemplates.CodeBinderPropertyHooks(this, in coreMembers, in binderMembers, in proxyAndHook);
+				string name = property.Name;
+				if (extBinderGetter != null) {
+					MemberTemplates.AddMemberBindToCreateHooksMethod(this, extBinderGetter, in coreMembers, in binderMembers, proxyAndHook.PropertyGetterProxyMembers.Value, proxyAndHook.PropertyGetterHookMembers.Value, name, false);
+					binderMembers.type.Binder.AddMethod(extBinderGetter);
+				}
+				if (extBinderSetter != null) {
+					MemberTemplates.AddMemberBindToCreateHooksMethod(this, extBinderSetter, in coreMembers, in binderMembers, proxyAndHook.PropertySetterProxyMembers.Value, proxyAndHook.PropertySetterHookMembers.Value, name, true);
+					binderMembers.type.Binder.AddMethod(extBinderSetter);
+				}
 
 			}
 		}
@@ -280,11 +375,14 @@ namespace HookGenExtender.Core {
 				if (method.IsConstructor || method.IsStaticConstructor || method.Name == "Finalize") continue;
 				if (method.IsCompilerGenerated()) continue;
 				if (!IsMethodAllowedCallback(method)) continue;
+				MethodDefAndRef methodInstance = new MethodDefAndRef(this, method, extensible.ImportedGameType, true);
 
-
-				if (BepInExTools.TryGetBIEHook(this, extensible, method, out BepInExHookRef hookInfo)) {
+				if (BepInExTools.TryGetBIEHook(this, extensible, methodInstance, out BepInExHookRef hookInfo)) {
 					ProxyAndHookPackage proxyAndHook = MemberTemplates.MakeExtensibleMethodProxy(this, in coreMembers, in hookInfo);
-					
+					MethodDefAndRef extBinderMethod = MemberTemplates.CodeBinderMethodHook(this, in coreMembers, in binderMembers, in proxyAndHook);
+					MemberTemplates.AddMemberBindToCreateHooksMethod(this, extBinderMethod, in coreMembers, in binderMembers, proxyAndHook.MethodProxyMembers, proxyAndHook.MethodHookMembers, null, false);
+
+					binderMembers.type.Binder.AddMethod(extBinderMethod);
 				}
 			}
 
