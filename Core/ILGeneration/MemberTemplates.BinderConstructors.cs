@@ -12,6 +12,7 @@ using Void = HookGenExtender.Core.DataStorage.ExtremelySpecific.Void;
 using BindingFlags = System.Reflection.BindingFlags;
 using dnlib.DotNet.Writer;
 using HookGenExtender.Core.Utils.Debugging;
+using HookGenExtender.Core.Utils.DNLib;
 
 namespace HookGenExtender.Core.ILGeneration {
 	public static partial class MemberTemplates {
@@ -25,7 +26,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="coreMembers"></param>
 		/// <param name="binderMembers"></param>
 		public static void MakeBindMethodFromCommonConstructor(ExtensiblesGenerator main, in ExtensibleCoreMembers coreMembers, in ExtensibleBinderCoreMembers binderMembers) {
-			MethodSig bindSignature = MethodSig.CreateStatic(coreMembers.weakReferenceType.Signature, coreMembers.type.ImportedGameTypeSig);
+			MethodSig bindSignature = MethodSig.CreateStatic(coreMembers.weakReferenceExtensibleType.Signature, coreMembers.type.ImportedGameTypeSig);
 			MethodDefAndRef bind = new MethodDefAndRef(main, "Bind", bindSignature, coreMembers.type.GenericBinder.Reference, MethodAttributes.Public);
 			bind.SetParameterName(0, "toObject");
 			coreMembers.type.Binder.AddMethod(bind);
@@ -132,20 +133,20 @@ namespace HookGenExtender.Core.ILGeneration {
 			bindBody.Emit(OpCodes.Ldelem, main.Shared.ConstructorInfoReference);
 			bindBody.EmitStoreThenLoad(constructor);
 			bindBody.EmitNull();
-			bindBody.EmitCall(main.Shared.ConstructorInfosNotEqual);
+			bindBody.EmitCall(main.Shared.ConstructorInfosEqual);
 			Instruction ctorAlreadyPresent = bindBody.NewBrDest();
-			bindBody.Emit(OpCodes.Brtrue, ctorAlreadyPresent);
+			bindBody.Emit(OpCodes.Brfalse, ctorAlreadyPresent);
 			////
 			ITypeDefOrRef[] ctorArgTypes = bindSignature.Params.Select(typeSig => typeSig.ToTypeDefOrRef()).ToArray();
 			bindBody.EmitLdloc(tExtensibleType);
 			bindBody.EmitGetConstructor(main, BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.NonPublic, ctorArgTypes);
 			bindBody.EmitStoreThenLoad(constructor);
 			bindBody.EmitNull();
-			bindBody.EmitCall(main.Shared.ConstructorInfosNotEqual);
+			bindBody.EmitCall(main.Shared.ConstructorInfosEqual);
 			Instruction ctorWasFound = bindBody.NewBrDest();
-			bindBody.Emit(OpCodes.Brtrue, ctorWasFound);
+			bindBody.Emit(OpCodes.Brfalse, ctorWasFound);
 			////////
-			bindBody.EmitException<MissingMethodException>(main, "To call this variant of Binder<TExtensible>.Bind(), you must declare a private constructor with identical arguments in your Extensible type.");
+			bindBody.EmitException<MissingMethodException>(main, $"To call this variant of Binder<TExtensible>.Bind(), you must declare a private constructor with identical arguments in your Extensible type.");
 			////////
 			bindBody.Emit(ctorWasFound);
 			bindBody.EmitLdThisFldAuto(binderMembers.constructorCacheField);
@@ -163,17 +164,26 @@ namespace HookGenExtender.Core.ILGeneration {
 			bindBody.EmitArrayOfArgs(main, bindSignature.Params.Count, assumeArrayAlreadyOnStack: false, shouldBoxFunc: (index) => (bindSignature.Params[index].IsValueType, bindSignature.Params[index].ToTypeDefOrRef()));
 			bindBody.EmitCallvirt(main.Shared.ConstructorInfoInvoke);
 			bindBody.Emit(OpCodes.Castclass, CommonGenericArgs.TYPE_ARG_0_REF);
-			bindBody.EmitStoreThenLoad(extensibleInstance);
+			bindBody.EmitStloc(extensibleInstance);
 			#endregion
 
 			// Note: Instance of TExtensible is currently on the stack.
 
-			#region Build result, create hooks if needed
-			bindBody.EmitNew(coreMembers.weakReferenceType.ReferenceExistingMethod(".ctor", main.Shared.WeakReferenceCtorSig));
+			#region Build result, store in bindings lookup, create hooks if needed
+			// Store in cache...
+			bindBody.Emit(OpCodes.Ldsfld, binderMembers.type.GenericBinder.ReferenceExistingField(binderMembers.bindingsField));
+			bindBody.EmitLdarg(0);
+			bindBody.EmitLdloc(extensibleInstance);
+			bindBody.Emit(OpCodes.Callvirt, binderMembers.cwtInstanceDef.ReferenceExistingMethod("Add", MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), coreMembers.type.ImportedGameTypeSig, CommonGenericArgs.TYPE_ARG_0)));
+
+			// Construct WeakReference<TExtensible>...
+			bindBody.EmitLdloc(extensibleInstance);
+			bindBody.EmitNew(coreMembers.weakReferenceExtensibleType.ReferenceExistingMethod(".ctor", main.Shared.WeakReferenceCtorSig));
 			bindBody.EmitLdThisFldAuto(binderMembers.hasCreatedBindingsField);
 			Instruction alreadyCreatedHooks = bindBody.NewBrDest();
 			bindBody.Emit(OpCodes.Brtrue, alreadyCreatedHooks);
 			////
+			// Create hooks, as it is needed...
 			bindBody.EmitNew(main.Shared.HashSetStringCtor);
 			bindBody.Emit(OpCodes.Call, binderMembers.createBindingsMethod.Reference);
 			bindBody.EmitValue(true);

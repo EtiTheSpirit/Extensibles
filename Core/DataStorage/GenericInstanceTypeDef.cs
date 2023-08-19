@@ -78,6 +78,16 @@ namespace HookGenExtender.Core.DataStorage {
 		}
 
 		/// <summary>
+		/// Returns a new reference to an existing method on this type.
+		/// </summary>
+		/// <param name="name"></param>
+		/// <param name="method"></param>
+		/// <returns></returns>
+		public MemberRef ReferenceExistingMethod(MethodDefAndRef existing) {
+			return new MemberRefUser(NonGeneric.Module, existing.Definition.Name, existing.Definition.MethodSig, Reference);
+		}
+
+		/// <summary>
 		/// Returns a new reference to an existing field on this type.
 		/// </summary>
 		/// <param name="name"></param>
@@ -85,6 +95,16 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <returns></returns>
 		public MemberRef ReferenceExistingField(string name, FieldSig field) {
 			return new MemberRefUser(NonGeneric.Module, name, field, Reference);
+		}
+
+		/// <summary>
+		/// Returns a new reference to an existing field on this type.
+		/// </summary>
+		/// <param name="name"></param>
+		/// <param name="field"></param>
+		/// <returns></returns>
+		public MemberRef ReferenceExistingField(FieldDefAndRef existing) {
+			return new MemberRefUser(NonGeneric.Module, existing.Definition.Name, existing.Definition.FieldSig, Reference);
 		}
 	}
 }
