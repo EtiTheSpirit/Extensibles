@@ -26,7 +26,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="coreMembers"></param>
 		/// <param name="binderMembers"></param>
 		public static void MakeBindMethodFromCommonConstructor(ExtensiblesGenerator main, in ExtensibleCoreMembers coreMembers, in ExtensibleBinderCoreMembers binderMembers) {
-			MethodSig bindSignature = MethodSig.CreateStatic(coreMembers.weakReferenceExtensibleType.Signature, coreMembers.type.ImportedGameTypeSig);
+			MethodSig bindSignature = MethodSig.CreateStatic(main.Shared.WeakReferenceGenericArg0.Signature, coreMembers.type.ImportedGameTypeSig);
 			MethodDefAndRef bind = new MethodDefAndRef(main, "Bind", bindSignature, coreMembers.type.GenericBinder.Reference, MethodAttributes.Public);
 			bind.SetParameterName(0, "toObject");
 			coreMembers.type.Binder.AddMethod(bind);
@@ -47,7 +47,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			MethodSig originalCtorSignatureImported = ((MemberRef)originalCtor.Reference).MethodSig.CloneAndImport(main);
 			MethodSig bindSignature = originalCtorSignatureImported.Clone();
 			bindSignature.Params.Insert(0, coreMembers.type.ImportedGameTypeSig);
-			bindSignature.RetType = coreMembers.weakReferenceExtensibleType.Signature;
+			bindSignature.RetType = main.Shared.WeakReferenceGenericArg0.Signature; //coreMembers.weakReferenceExtensibleType.Signature;
 			bindSignature.HasThis = false;
 
 			// The extensible default constructor is a constructor that takes in the original type and nothing else.

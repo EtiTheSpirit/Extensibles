@@ -125,8 +125,10 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="currentType"></param>
 		/// <param name="makeMemberWithin"></param>
 		public static void MakeImplicitCasts(ExtensiblesGenerator main, ExtensibleTypeData currentType, ExtensibleTypeData makeMemberWithin) {
-			MethodDefAndRef cast = new MethodDefAndRef(main, "op_Implicit", MethodSig.CreateStatic(currentType.ImportedGameTypeSig, makeMemberWithin.ExtensibleType.Signature), makeMemberWithin.ExtensibleType.Reference, MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName | MethodAttributes.HideBySig);
+			MethodDefAndRef cast = new MethodDefAndRef(main, "op_Implicit", MethodSig.CreateStatic(currentType.ImportedGameTypeSig, makeMemberWithin.ExtensibleType.Signature), makeMemberWithin.ExtensibleType.Reference, MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
 			cast.SetParameterName(0, "extensibleObject");
+			cast.Definition.IsNoOptimization = false;
+			cast.Definition.IsNoInlining = false;
 			CilBody body = cast.GetOrCreateBody();
 			PropertyDefAndRef org = currentType.ExtensibleType.RichProperties.FirstOrDefault(prop => prop.Definition.Name == "<Extensible>Original");
 			body.EmitGetPropAuto(org); // This actually works (it emits "this" which is arg 0, which is conveniently the reference to the extensible type anyway)
@@ -136,7 +138,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			if (main.TryGetParent(currentType, out ExtensibleTypeData parent)) {
 				// Do it again using the parent type, if applicable.
-				MakeImplicitCasts(main, parent, currentType);
+				MakeImplicitCasts(main, parent, makeMemberWithin);
 			}
 		}
 

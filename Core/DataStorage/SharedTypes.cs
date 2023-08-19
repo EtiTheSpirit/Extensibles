@@ -42,6 +42,11 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		public MethodSig WeakRefTryGetTargetSig { get; }
 
+		/// <summary>
+		/// An instance of <see cref="WeakReference{T}"/> where <c>T</c> is <c>!0</c> (the first generic arg of the class or struct that this is within).
+		/// </summary>
+		public GenericInstanceTypeDef WeakReferenceGenericArg0 { get; }
+
 		#endregion
 
 		#region ConditionalWeakTable<TKey, TValue>
@@ -468,6 +473,7 @@ namespace HookGenExtender.Core.DataStorage {
 			WeakReferenceSig = WeakReference.ToTypeSig();
 			WeakReferenceCtorSig = MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), CommonGenericArgs.TYPE_ARG_0);
 			WeakRefTryGetTargetSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.BYREF_TYPE_ARG_0);
+			WeakReferenceGenericArg0 = new GenericInstanceTypeDef(main, WeakReference, CommonGenericArgs.TYPE_ARG_0);
 
 			main.Cache.ImportForReferenceAndSignature(typeof(ConditionalWeakTable<,>), out ITypeDefOrRef cwtRef, out TypeSig cwtSig);
 			CWTReference = cwtRef;
