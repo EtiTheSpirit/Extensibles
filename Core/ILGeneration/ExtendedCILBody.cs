@@ -49,11 +49,9 @@ namespace HookGenExtender.Core.ILGeneration {
 		public static bool IsBrDestNop(this Instruction instruction) => instruction.OpCode == OpCodes.Nop && instruction.Operand is CilBody;
 
 		/// <summary>
-		/// Looks for jumps to <see cref="OpCodes.Nop"/>, and replaces those jumps such that they instead jump to the instruction immediately following it.
-		/// It will then remove the nops from the IL.
-		/// <para/>
-		/// <strong>IMPORTANT IMPLEMENTATION NOTE:</strong> This looks for nops where <strong>their operand is the method body.</strong> This is how it differentiates
-		/// between a jump destination nop and an ordinary nop. See <see cref="ILTools.NewBrDest(CilBody)"/>.
+		/// Looks for jumps to <see cref="OpCodes.Nop"/> where the <c>nop</c>'s operator is the method body (see <see cref="ILTools.NewBrDest(CilBody)"/>).
+		/// It then replaces those jumps, such that they instead jump to the instruction immediately following it.
+		/// After this is done, all nops that were used as jump destinations will be deleted from the method body.
 		/// </summary>
 		/// <param name="body"></param>
 		/// <param name="raiseErrorOnStrays">If true, any nops left behind that classify as jump targets (created with <see cref="ILTools.NewBrDest(CilBody)"/>) will raise an exception warning you of their presence.</param>

@@ -13,6 +13,7 @@ using BindingFlags = System.Reflection.BindingFlags;
 using dnlib.DotNet.Writer;
 using HookGenExtender.Core.Utils.Debugging;
 using HookGenExtender.Core.Utils.DNLib;
+using System.Runtime.CompilerServices;
 
 namespace HookGenExtender.Core.ILGeneration {
 	public static partial class MemberTemplates {
@@ -174,7 +175,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			bindBody.Emit(OpCodes.Ldsfld, binderMembers.type.GenericBinder.ReferenceExistingField(binderMembers.bindingsField));
 			bindBody.EmitLdarg(0);
 			bindBody.EmitLdloc(extensibleInstance);
-			bindBody.Emit(OpCodes.Callvirt, binderMembers.cwtInstanceDef.ReferenceExistingMethod("Add", MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), coreMembers.type.ImportedGameTypeSig, CommonGenericArgs.TYPE_ARG_0)));
+			bindBody.Emit(OpCodes.Callvirt, binderMembers.cwtInstanceDef.ReferenceExistingMethod("Add", main.Shared.CWTAddSig));
 
 			// Construct WeakReference<TExtensible>...
 			bindBody.EmitLdloc(extensibleInstance);

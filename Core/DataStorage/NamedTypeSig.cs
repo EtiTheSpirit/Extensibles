@@ -8,25 +8,25 @@ using System.Threading.Tasks;
 namespace HookGenExtender.Core.DataStorage {
 
 	/// <summary>
-	/// Represents a parameter signature with a name. In general this should be cached.
+	/// Represents a parameter signature with a name, for use in method arguments.
 	/// <para/>
 	/// This is not to be used for generic types. See <see cref="GenericParam"/> for generic usage.
 	/// </summary>
-	public sealed class NamedTypeSig {
+	public struct NamedTypeSig {
 
 		/// <summary>
-		/// The name of this generic parameter.
+		/// The name of this method parameter.
 		/// </summary>
-		public string Name { get; set; }
+		public string name;
 
 		/// <summary>
-		/// The signature of this generic parameter.
+		/// The signature of this method parameter.
 		/// </summary>
-		public TypeSig Signature { get; }
+		public TypeSig signature;
 
-		public NamedTypeSig(TypeSig type, string name) {
-			Signature = type;
-			Name = name;
+		public NamedTypeSig(TypeSig signature, string name) {
+			this.signature = signature;
+			this.name = name;
 		}
 
 		public static implicit operator NamedTypeSig((TypeSig, string) tuple) => new NamedTypeSig(tuple.Item1, tuple.Item2);

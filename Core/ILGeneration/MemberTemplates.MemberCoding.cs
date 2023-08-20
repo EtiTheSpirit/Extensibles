@@ -13,7 +13,39 @@ namespace HookGenExtender.Core.ILGeneration {
 	public static partial class MemberTemplates {
 
 		/// <summary>
-		/// Initializes the common contents of an extensible type. This will write the code of its constructor and its property named "Original".
+		/// To be called on the second iteration of the generator, this completes the code of the Extensible type's constructor.
+		/// This is late-bound because it must load the definition of the superclass's constructor for the base() call.
+		/// </summary>
+		/// <param name="main"></param>
+		/// <param name="coreMembers"></param>
+		public static void LateWriteConstructorOfCoreMbr(ExtensiblesGenerator main, in ExtensibleCoreMembers coreMembers) {
+			ExtensibleTypeData type = coreMembers.type;
+			MethodDefAndRef constructor = coreMembers.constructor;
+			PropertyDefAndRef original = coreMembers.originalObjectProxy;
+			FieldDefAndRef storage = coreMembers.originalObjectWeakReference;
+			GenericInstanceTypeDef weakRefType = coreMembers.weakReferenceType;
+			MemberRef newWeakReference = weakRefType.ReferenceExistingMethod(".ctor", main.Shared.WeakReferenceCtorSig);
+			CilBody ctorBody = constructor.GetOrCreateBody();
+			// WAIT: Do we have a base constructor?
+			if (main.TryGetParent(coreMembers.type, out ExtensibleTypeData parent)) {
+				// Yes!
+				MethodDefAndRef ctor = parent.ExtensibleStandardConstructor;
+				ctorBody.EmitThis();
+				ctorBody.EmitLdarg(1);
+				ctorBody.EmitCall(ctor.Definition);
+			}
+			ctorBody.EmitThis();
+			ctorBody.Emit(OpCodes.Ldarg_1);                     // original
+			ctorBody.EmitNew(newWeakReference);                 // new WeakReference<T>(original)
+			ctorBody.Emit(OpCodes.Stfld, storage.Definition);   // this.<Extensible>original = ^
+			ctorBody.EmitRet();
+			ctorBody.FinalizeMethodBody(main);
+		}
+
+		/// <summary>
+		/// Initializes the common contents of an extensible type. This will write the code of its property named "Original".
+		/// <para/>
+		/// <strong>This will NOT write the constructor.</strong>
 		/// </summary>
 		private static void CodeExtensibleCoreMembers(ExtensiblesGenerator main, in ExtensibleCoreMembers coreMembers) {
 			ExtensibleTypeData type = coreMembers.type;
@@ -21,17 +53,6 @@ namespace HookGenExtender.Core.ILGeneration {
 			PropertyDefAndRef original = coreMembers.originalObjectProxy;
 			FieldDefAndRef storage = coreMembers.originalObjectWeakReference;
 			GenericInstanceTypeDef weakRefType = coreMembers.weakReferenceType;
-
-			#region Constructor
-			MemberRef newWeakReference = weakRefType.ReferenceExistingMethod(".ctor", main.Shared.WeakReferenceCtorSig);
-			CilBody ctorBody = constructor.GetOrCreateBody();
-			ctorBody.EmitThis();
-			ctorBody.Emit(OpCodes.Ldarg_1);						// original
-			ctorBody.EmitNew(newWeakReference);					// new WeakReference<T>(original)
-			ctorBody.Emit(OpCodes.Stfld, storage.Definition);	// this.<Extensible>original = ^
-			ctorBody.EmitRet();
-			ctorBody.FinalizeMethodBody(main);
-			#endregion
 
 			#region Original
 			MemberRef tryGetTarget = weakRefType.ReferenceExistingMethod("TryGetTarget", main.Shared.WeakRefTryGetTargetSig);
@@ -72,6 +93,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			#region cctor
 
 			#region Initialize Variables
+			type.Binder.Underlying.IsBeforeFieldInit = true;
 			CilBody cctor = type.Binder.StaticConstructor.Body = new CilBody();
 			Local extensibleType = new Local(main.Shared.TypeSig, "tExtensible");
 			Local constructors = new Local(main.Shared.ConstructorInfoArraySig, "constructors");
@@ -79,6 +101,9 @@ namespace HookGenExtender.Core.ILGeneration {
 			Local ctorForLoopLength = new Local(main.CorLibTypeSig<int>(), "length");
 			cctor.SetLocals(extensibleType, constructors, ctorForLoopIndex, ctorForLoopLength);
 			#endregion
+
+			cctor.EmitTypeof(main, CommonGenericArgs.TYPE_ARG_0_REF);                       // typeof(TExtensible)
+			cctor.EmitStloc(extensibleType); // Used in the "Ensure all constructors are private" block
 
 			cctor.EmitStringConcat(main, true, new Action<CilBody, ExtensiblesGenerator>[] {
 				(body, main) => body.Emit(OpCodes.Ldstr, "[Extensibles] Initializing Binder<"),
@@ -102,8 +127,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			// Now some validation
 			#region cctor :: Ensure provided type parameter is not abstract.
 			// extensibleType = typeof(TExtensible), duplicate for re-use.
-			cctor.EmitTypeof(main, CommonGenericArgs.TYPE_ARG_0_REF);						// typeof(TExtensible)
-			cctor.EmitStoreThenLoad(extensibleType); // Used in the "Ensure all constructors are private" block
+			cctor.EmitLdloc(extensibleType);
 			cctor.EmitCallvirt(main.Shared.Type_get_IsAbstract);
 			
 			Instruction getIsSealed = cctor.NewBrDest();
@@ -201,7 +225,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			#region CreateBindings (Initial)
 			CilBody createBindingsBody = createBindings.GetOrCreateBody();
-			Local userType = new Local(CommonGenericArgs.TYPE_ARG_0, "userType");
+			Local userType = new Local(main.Shared.TypeSig, "userType");
 			Local propertyRef = new Local(main.Shared.PropertyInfoSig, "propertyRef");
 			Local userTypeName = new Local(main.CorLibTypeSig<string>(), "userTypeName");
 			createBindingsBody.SetLocals(userType, propertyRef, userTypeName);

@@ -23,13 +23,13 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="parameters"></param>
 		/// <returns></returns>
 		private static MethodDefAndRef CreateConstructor(ExtensiblesGenerator main, CachedTypeDef onType, MethodAttributes attributes, params NamedTypeSig[] parameters) {
-			MethodSig ctorSig = MethodSig.CreateInstance(main.CorLibTypeSig(), parameters.Select(param => param.Signature).ToArray());
+			MethodSig ctorSig = MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), parameters.Select(param => param.signature).ToArray());
 			attributes |= MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.RTSpecialName;
 			attributes &= ~MethodAttributes.Static;
 			MethodDefUser ctor = new MethodDefUser(".ctor", ctorSig, attributes);
 			int numParams = parameters.Length;
 			for (int i = 0; i < numParams; i++) {
-				ctor.SetParameterName(i, parameters[i].Name);
+				ctor.SetParameterName(i, parameters[i].name);
 			}
 			return new MethodDefAndRef(main, ctor, onType.Reference, false);
 		}
@@ -53,10 +53,11 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// </summary>
 		public static ExtensibleCoreMembers MakeExtensibleCoreMembers(ExtensiblesGenerator main, ExtensibleTypeData @in) {
 			GenericInstanceTypeDef weakRefFldType = main.Shared.WeakReference.MakeGenericType(main, @in.ImportedGameTypeSig);
-			GenericInstanceTypeDef weakRefExtensibleFldType = main.Shared.WeakReference.MakeGenericType(main, @in.ExtensibleType.Signature);
+			GenericInstanceTypeDef weakRefExtensibleFldType = main.Shared.WeakReference.MakeGenericType(main, CommonGenericArgs.TYPE_ARG_0);
 
 			MethodDefAndRef constructor = CreateConstructor(main, @in.ExtensibleType, new NamedTypeSig(@in.ImportedGameTypeSig, "original"));
 			@in.ExtensibleType.AddMethod(constructor);
+			@in.ExtensibleStandardConstructor = constructor;
 
 			FieldDefAndRef weakRefResult = weakRefFldType.CreateFieldOfThisType("<Extensible>originalWeakRef", CommonAttributes.SPECIAL_LOCKED_FIELD, @in.ExtensibleType.Reference);
 			@in.ExtensibleType.AddField(weakRefResult);
@@ -132,7 +133,10 @@ namespace HookGenExtender.Core.ILGeneration {
 			CilBody body = cast.GetOrCreateBody();
 			PropertyDefAndRef org = currentType.ExtensibleType.RichProperties.FirstOrDefault(prop => prop.Definition.Name == "<Extensible>Original");
 			body.EmitThis();
-			body.EmitCallvirt(org.Definition); // This actually works (it emits "this" which is arg 0, which is conveniently the reference to the extensible type anyway)
+			body.EmitCallvirt(org.Definition.GetMethod); // This actually works (it emits "this" which is arg 0, which is conveniently the reference to the extensible type anyway)
+			if (currentType != makeMemberWithin) {
+				body.Emit(OpCodes.Castclass, currentType.ImportedGameType);
+			}
 			body.EmitRet(); // gg ez
 			body.FinalizeMethodBody(main);
 			makeMemberWithin.ExtensibleType.AddMethod(cast);

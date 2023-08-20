@@ -27,6 +27,9 @@ namespace HookGenExtender.Core.Utils {
 		}
 
 		public static void GenerateDocumentation(ExtensiblesGenerator main, FileInfo toFile) {
+			// TODO: Without adding a huge library dependency (this is being shipped as a mod, which typically have *no* libs)
+			// how can I generate this more cleanly?
+
 			StringBuilder xml = new StringBuilder(XML_START);
 			xml.AppendFormat("<assembly><name>{0}</name></assembly>\n", main.Extensibles.Name);
 			xml.AppendLine("<members>");
@@ -41,7 +44,7 @@ namespace HookGenExtender.Core.Utils {
 				xml.AppendLine("When you override these properties or methods, they behave as an <strong>extensible hook</strong>. ");
 				xml.AppendLine("Extensible hooks serve both as a proxy to the original game code, and are also a BepInEx <c>On.</c> hook, at the same time. ");
 				xml.AppendLine("This introduces some very specific behavioral rules that you <strong>MUST</strong> pay attention to!");
-				AppendList(xml, new (string, string)[] {
+				AppendList(xml, new[] {
 					("When used manually...", "Using base.Method() will execute original game code, <em>including</em> mod hooks, but <em>excluding</em> this function<br/>(it won't be called as part of a hook)."),
 					("When called by BepInEx (as a hook)...", "Using base.Method() is identical to what would traditionally be written as <c>orig(self)</c>.")
 				});

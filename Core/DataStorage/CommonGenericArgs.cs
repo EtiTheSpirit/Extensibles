@@ -6,6 +6,10 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace HookGenExtender.Core.DataStorage {
+
+	/// <summary>
+	/// Generic arguments that will or could be commonly used by this program.
+	/// </summary>
 	public static class CommonGenericArgs {
 
 		/// <summary><c>!0</c> represents the first generic argument of the type that this member or the current calling context is a part of.</summary>

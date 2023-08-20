@@ -17,7 +17,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		#region Binder Hooked Methods
 
 		/// <summary>
-		/// Declares, codes, and registers the method that the binder registers as a BIE hook. The generated method will call its counterpart in the extensible type. This is used by step 4.3
+		/// Declares, codes, and registers the method that the binder registers as a BIE hook. The generated method will call its counterpart in the extensible type. This should be used after step 4.3
 		/// </summary>
 		/// <param name="main"></param>
 		/// <param name="coreMembers"></param>
@@ -42,7 +42,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		}
 
 		/// <summary>
-		/// Declares, codes, and registers the method that the binder registers as a BIE hook. The generated method will call its counterpart in the extensible type. This is used by step 4.2
+		/// Declares, codes, and registers the method that the binder registers as a BIE hook. The generated method will call its counterpart in the extensible type. This should be used after step 4.2
 		/// <para/>
 		/// This returns (getter, setter). Either will be null if the property is missing its get method or set method respectively.
 		/// </summary>
@@ -107,7 +107,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			// Load all applicable args and call the extensible's declared override.
 			body.EmitLdloc(extensibleInstance);
-			body.EmitAmountOfArgs(numArgsForProxyCall, 0, false);
+			body.EmitAmountOfArgs(numArgsForProxyCall, 2, false);
 			body.Emit(OpCodes.Callvirt, extensibleMethodProxyMembers.proxyMethod.Reference);
 
 			// Now remove the delegate reference.
@@ -136,7 +136,8 @@ namespace HookGenExtender.Core.ILGeneration {
 
 		/// <summary>
 		/// <strong>Step 3 of the Extensible Type Pipeline:</strong><br/>
-		/// This emits the beginning of the Binder's CreateBindings method.
+		/// This emits the late-beginning of the Binder's CreateBindings method.
+		/// The true beginning is done in <see cref="MakeBinderCoreMembers"/>.
 		/// </summary>
 		/// <param name="main"></param>
 		/// <param name="binderMembers"></param>
@@ -215,8 +216,8 @@ namespace HookGenExtender.Core.ILGeneration {
 					createBindings.EmitUnityDbgLog(main, $"[Extensible] Found implementation of Property {{{propertyNameIfApplicable}}}. Constructing property hook...");
 				}
 				createBindings.EmitUnityDbgLog(main, $"[Extensible] Hooking {binderHookMethod.Reference.Name.Substring(0, 3)}ter...");
-				createBindings.EmitMethodof(main, (IMethod)hookInfo.originalGameMethod.Reference);          // from
-				createBindings.EmitMethodof(main, (IMethod)binderHookMethod.Reference);                     // to
+				createBindings.EmitMethodof(main, hookInfo.originalGameMethod.Reference);					// from
+				createBindings.EmitMethodof(main, binderHookMethod.Reference);								// to
 				createBindings.EmitNew(main.Shared.HookCtor);                                               // new Hook(from, to)
 				createBindings.Emit(OpCodes.Pop);                                                           // Remove the new hook from the stack.
 

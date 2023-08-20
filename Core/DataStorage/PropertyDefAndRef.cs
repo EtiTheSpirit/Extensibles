@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Void = HookGenExtender.Core.DataStorage.ExtremelySpecific.Void;
 
 namespace HookGenExtender.Core.DataStorage {
 
@@ -57,6 +58,7 @@ namespace HookGenExtender.Core.DataStorage {
 		/// <param name="setterAttributes">The attributes of a pre-created, empty, setter method. Use null to have no setter. Note that <see cref="MethodAttributes.HideBySig"/> and <see cref="MethodAttributes.SpecialName"/> are both implicit and thus not needed.</param>
 		public PropertyDefAndRef(ExtensiblesGenerator main, string name, PropertySig signature, IMemberRefParent declaringType, PropertyAttributes attrs = default, MethodAttributes? getterAttributes = default, MethodAttributes? setterAttributes = default) {
 			const MethodAttributes requiredAttributes = MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+			const MethodAttributes removeAttributes = MethodAttributes.Abstract;
 			Generator = main;
 			Definition = new PropertyDefUser(name, signature, attrs);
 			Module = main.Extensibles;
@@ -84,16 +86,16 @@ namespace HookGenExtender.Core.DataStorage {
 				}
 				MethodSig getterSig = MethodSig.CreateStatic(signature.RetType);
 				getterSig.HasThis = !isStatic;
-				Getter = new MethodDefAndRef(main, $"get_{name}", getterSig, declaringType, getterAttributes.Value | requiredAttributes);
+				Getter = new MethodDefAndRef(main, $"get_{name}", getterSig, declaringType, (getterAttributes.Value | requiredAttributes) & ~removeAttributes);
 				Definition.GetMethod = Getter.Definition;
 			}
 			if (setterAttributes != null) {
 				if ((setterAttributes.Value & requiredAttributes) != 0) {
 
 				}
-				MethodSig setterSig = MethodSig.CreateStatic(main.CorLibTypeSig(), signature.RetType);
+				MethodSig setterSig = MethodSig.CreateStatic(main.CorLibTypeSig<Void>(), signature.RetType);
 				setterSig.HasThis = !isStatic;
-				Setter = new MethodDefAndRef(main, $"set_{name}", setterSig, declaringType, setterAttributes.Value | requiredAttributes);
+				Setter = new MethodDefAndRef(main, $"set_{name}", setterSig, declaringType, (setterAttributes.Value | requiredAttributes) & ~removeAttributes);
 				Definition.SetMethod = Setter.Definition;
 			}
 		}

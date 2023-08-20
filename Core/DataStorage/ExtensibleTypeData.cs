@@ -44,6 +44,11 @@ namespace HookGenExtender.Core.DataStorage {
 		/// </summary>
 		public GenericInstanceTypeDef GenericBinder { get; }
 
+		/// <summary>
+		/// The standard constructor common across all Extensible types that provides base(original).
+		/// </summary>
+		public MethodDefAndRef ExtensibleStandardConstructor { get; internal set; }
+
 		public ExtensibleTypeData(TypeDef original, TypeRef originalImported, CachedTypeDef replacement, CachedTypeDef binder) {
 			_originalGameType = original;
 			ImportedGameType = originalImported;

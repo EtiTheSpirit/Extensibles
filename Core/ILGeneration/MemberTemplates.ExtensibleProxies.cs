@@ -59,11 +59,13 @@ namespace HookGenExtender.Core.ILGeneration {
 			if (originalGameProperty.Getter != null) {
 				getter = MakeExtensiblePropertyAccessorProxy(main, originalGameProperty.Getter, in coreMembers, out BepInExHookRef getterHookV);
 				getter.Value.proxyMethod.Definition.Attributes |= MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+				getter.Value.proxyMethod.Definition.Attributes &= ~MethodAttributes.Abstract;
 				getterHook = getterHookV;
 			}
 			if (originalGameProperty.Setter != null) {
 				setter = MakeExtensiblePropertyAccessorProxy(main, originalGameProperty.Setter, in coreMembers, out BepInExHookRef setterHookV);
 				setter.Value.proxyMethod.Definition.Attributes |= MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+				setter.Value.proxyMethod.Definition.Attributes &= ~MethodAttributes.Abstract;
 				setterHook = setterHookV;
 			}
 
@@ -104,7 +106,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			#endregion
 
 			// Register the new delegate type.
-			origDelegateType.CachedDelegateType.Underlying.DeclaringType2 = coreMembers.type.ExtensibleType.Underlying;
+			origDelegateType.DelegateType.DeclaringType2 = coreMembers.type.ExtensibleType.Underlying;
 
 			// Now create the hook reference.
 			hook = new BepInExHookRef(
@@ -227,7 +229,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			proxyBody.Emit(OpCodes.Stfld, isCallerInInvocation.Definition);                // isCallerInInvocation = true
 
 			proxyBody.EmitThis();
-			proxyBody.EmitCallvirt(coreMembers.originalObjectProxy.Definition); // this.Original...
+			proxyBody.EmitCallvirt(coreMembers.originalObjectProxy.Definition.GetMethod); // this.Original...
 			proxyBody.EmitAmountOfArgs(numGameParams, 1, false);			// All args of method
 			proxyBody.Emit(OpCodes.Callvirt, originalGameMethod.Reference);		// ... .Method()
 
@@ -246,7 +248,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			proxyBody.EmitThis();
 			proxyBody.Emit(OpCodes.Ldfld, origDelegateRef.Definition);                                  // orig
 			proxyBody.EmitThis();
-			proxyBody.EmitCallvirt(coreMembers.originalObjectProxy.Definition);   // this.Original (arg 0)
+			proxyBody.EmitCallvirt(coreMembers.originalObjectProxy.Definition.GetMethod);   // this.Original (arg 0)
 			proxyBody.EmitAmountOfArgs(numGameParams, 1, false);							// All args of method (arg 1, ...)
 			proxyBody.EmitCall(origDelegateType.Invoke);									// Call orig(self, ...)
 			proxyBody.EmitRet();

@@ -70,14 +70,11 @@
     <Compile Include="Core\DataStorage\BulkMemberStorage\ProxyAndHookPackage.cs" />
     <Compile Include="Core\DataStorage\CachedTypeDef.cs" />
     <Compile Include="Core\DataStorage\CommonGenericArgs.cs" />
-    <Compile Include="Core\DataStorage\CorLibTypeContainer.cs" />
     <Compile Include="Core\DataStorage\BulkMemberStorage\ExtensibleCoreMembers.cs" />
-    <Compile Include="Core\DataStorage\DefinitionAndReference.cs" />
     <Compile Include="Core\DataStorage\ExtensibleTypeData.cs" />
     <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\DelegateTypeDefAndRef.cs" />
     <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\DelegateTypeRef.cs" />
     <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\IDelegateTypeWrapper.cs" />
-    <Compile Include="Core\DataStorage\ExtremelySpecific\InstructionOrString.cs" />
     <Compile Include="Core\DataStorage\ExtremelySpecific\Void.cs" />
     <Compile Include="Core\DataStorage\FieldDefAndRef.cs" />
     <Compile Include="Core\DataStorage\GenericInstanceTypeDef.cs" />
@@ -105,7 +102,6 @@
     <Compile Include="Core\Utils\Ext\NameConversion.cs" />
     <Compile Include="Core\Utils\Ext\TypeExtensions.cs" />
     <None Include="HookGenExtenderMain.cs" />
-    <None Include="MirrorGenerator.cs" />
     <Compile Include="Core\Utils\MemberMutation\MethodMutator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Core\ImportCache.cs" />

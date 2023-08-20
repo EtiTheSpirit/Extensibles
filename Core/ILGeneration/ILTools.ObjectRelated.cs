@@ -8,6 +8,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using Void = HookGenExtender.Core.DataStorage.ExtremelySpecific.Void;
 
 namespace HookGenExtender.Core.ILGeneration {
 	public static partial class ILTools {
@@ -26,7 +27,7 @@ namespace HookGenExtender.Core.ILGeneration {
 				_asyncCallbackTypeSig = main.Cache.ImportAsTypeSig(typeof(AsyncCallback));
 				_iAsyncResultTypeSig = main.Cache.ImportAsTypeSig(typeof(IAsyncResult));
 
-				_ctorSig = MethodSig.CreateInstance(main.CorLibTypeSig(), main.CorLibTypeSig<object>(), main.CorLibTypeSig<nint>());
+				_ctorSig = MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), main.CorLibTypeSig<object>(), main.CorLibTypeSig<nint>());
 				_endInvokeSig = MethodSig.CreateInstance(main.CorLibTypeSig<object>(), _iAsyncResultTypeSig);
 			}
 
@@ -78,7 +79,9 @@ namespace HookGenExtender.Core.ILGeneration {
 			/// <returns></returns>
 			public DelegateTypeDefAndRef CreateDelegateType(MethodSig signature, string name) {
 				TypeDefUser del = new TypeDefUser(name, _multicastDelegateTypeRef);
+				_main.Extensibles.Types.Add(del);
 				del.IsSealed = true;
+				del.Attributes |= TypeAttributes.NestedPrivate;
 
 				// The methods in the delegate have no body, which makes this very easy.
 				MethodDefUser constructor = new MethodDefUser(

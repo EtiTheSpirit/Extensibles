@@ -101,11 +101,14 @@ namespace HookGenExtender.Core {
 			Original = gameAssembly;
 			BepInExHooksModule = bepInExHooks;
 			NewModuleName = newModuleName ?? ("EXTENSIBLES-" + gameAssembly.Name);
+			NewModuleName = NewModuleName.Trim();
+			NewModuleName = Path.ChangeExtension(NewModuleName, null);
+
 			Extensibles = new ModuleDefUser(NewModuleName);
 			Extensibles.RuntimeVersion = Original.RuntimeVersion;
 			Extensibles.Kind = ModuleKind.Dll;
 
-			_asm = new AssemblyDefUser($"EXTENSIBLES-{gameAssembly.Name}", CURRENT_EXTENSIBLES_VERSION);
+			_asm = new AssemblyDefUser(NewModuleName, CURRENT_EXTENSIBLES_VERSION);
 			_asm.ProcessorArchitecture = AssemblyAttributes.PA_MSIL;
 			_asm.Modules.Add(Extensibles);
 
@@ -177,11 +180,13 @@ namespace HookGenExtender.Core {
 					ns = '.' + ns;
 				}
 				CachedTypeDef replacement = new CachedTypeDef(this, $"Extensible{ns}", def.Name, TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Class | TypeAttributes.AutoLayout | TypeAttributes.AnsiClass);
-				
+				replacement.Underlying.BaseType = CorLibTypeRef<object>();
+
 				CachedTypeDef binder = new CachedTypeDef(this, "Binder`1", TypeAttributes.Sealed | TypeAttributes.Abstract | TypeAttributes.NestedPublic | TypeAttributes.AutoLayout | TypeAttributes.AnsiClass);
 				GenericParam binderGeneric = new GenericParamUser(0, GenericParamAttributes.NonVariant, "TExtensible");
 				binderGeneric.GenericParamConstraints.Add(new GenericParamConstraintUser(replacement.Underlying));
 				binder.GenericParameters.Add(binderGeneric);
+				binder.Underlying.BaseType = CorLibTypeRef<object>();
 
 				binder.Underlying.DeclaringType2 = replacement.Underlying;
 
@@ -191,7 +196,7 @@ namespace HookGenExtender.Core {
 				real++;
 
 				if (current == 0) {
-					Console.WriteLine(new string(' ', Console.BufferWidth));
+					Console.Write(new string(' ', Console.BufferWidth));
 					Console.CursorTop--;
 				}
 				if (current % 100 == 0) {
@@ -216,6 +221,8 @@ namespace HookGenExtender.Core {
 				foreach (TypeDef nested in binding.Key.NestedTypes) {
 					if (_extensibleLookup.TryGetValue(nested, out ExtensibleTypeData nestedCustomType)) {
 						nestedCustomType.ExtensibleType.Underlying.DeclaringType2 = replacement.ExtensibleType.Underlying;
+						nestedCustomType.ExtensibleType.Underlying.Namespace = null; // Remove its namespace whilst nested.
+						nestedCustomType.ExtensibleType.Underlying.Attributes |= TypeAttributes.NestedPublic; // Mark it as nested.
 					}
 				}
 				if (gameOriginal.BaseType != null && !gameOriginal.BaseType.IsCorLibType()) {
@@ -266,8 +273,11 @@ namespace HookGenExtender.Core {
 			elapsed += time;
 			Console.WriteLine($"Generating type contents ({current} of {real}...) took {time} seconds.               ");
 
+			// TO FUTURE XAN/MAINTAINERS:
+			// For *some reason*, this value here (added by the custom attribute) is used when
+			// loading the assembly from file to do a version check...
 			ITypeDefOrRef asmFileVerAttr = Cache.Import(typeof(System.Reflection.AssemblyVersionAttribute));
-			MemberRefUser fileVerCtor = new MemberRefUser(Extensibles, ".ctor", MethodSig.CreateInstance(CorLibTypeSig(), CorLibTypeSig<string>()), asmFileVerAttr);
+			MemberRefUser fileVerCtor = new MemberRefUser(Extensibles, ".ctor", MethodSig.CreateInstance(CorLibTypeSig<Void>(), CorLibTypeSig<string>()), asmFileVerAttr);
 			CustomAttribute version = new CustomAttribute(fileVerCtor, new CAArgument[] { new CAArgument(CorLibTypeSig<string>(), CURRENT_EXTENSIBLES_VERSION.ToString()) });
 			_asm.CustomAttributes.Add(version);
 
@@ -275,6 +285,9 @@ namespace HookGenExtender.Core {
 			List<CANamedArgument> namedArgs = new List<CANamedArgument> { new CANamedArgument(false, CorLibTypeSig<bool>(), nameof(System.Security.Permissions.SecurityPermissionAttribute.SkipVerification), new CAArgument(CorLibTypeSig<bool>(), true)) };
 			_asm.DeclSecurities.Add(new DeclSecurityUser(SecurityAction.RequestMinimum, new List<SecurityAttribute>() { new SecurityAttribute(secPermsTypeRef, namedArgs) }));
 
+			// ...yet, for *some other reason*, this is not, but without it
+			// tools like DNSpy see the default 1.0.0.0 version.
+			// So both it is.
 			_asm.Version = CURRENT_EXTENSIBLES_VERSION;
 			Extensibles.CreatePdbState(PdbFileKind.PortablePDB);
 
@@ -282,13 +295,6 @@ namespace HookGenExtender.Core {
 		}
 
 		public void Save(FileInfo to, FileInfo documentation = null) {
-
-			// TO FUTURE XAN/MAINTAINERS:
-			// For *some reason*, this value here (added by the custom attribute) is used when loading the assembly from file to do a version check.
-
-			// For *some other reason*, this is not, but without it, tools like DNSpy see the default 1.0.0.0 version.
-
-
 			Console.WriteLine("Saving to disk...");
 			if (to.Exists) to.Delete();
 			using FileStream stream = to.Open(FileMode.CreateNew);
@@ -320,6 +326,7 @@ namespace HookGenExtender.Core {
 		}
 
 		private void FinalizeMakeExtensibleTypeProcedure((ExtensibleCoreMembers, ExtensibleBinderCoreMembers) data, ExtensibleTypeData binding) {
+			MemberTemplates.LateWriteConstructorOfCoreMbr(this, in data.Item1);
 			MemberTemplates.FinalizeCreateBindingsMethod(this, in data.Item1, in data.Item2);
 			MemberTemplates.MakeImplicitCasts(this, binding, binding);
 		}
@@ -418,7 +425,7 @@ namespace HookGenExtender.Core {
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
 		/// <exception cref="ArgumentException"></exception>
-		public CorLibTypeSig CorLibTypeSig(Type type = null) {
+		public CorLibTypeSig CorLibTypeSig(Type type) {
 			ICorLibTypes corLibTypes = Extensibles.CorLibTypes;
 			if (type is null) return corLibTypes.Void;
 

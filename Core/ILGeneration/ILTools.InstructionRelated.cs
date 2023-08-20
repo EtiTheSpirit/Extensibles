@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using System.Reflection;
 using HookGenExtender.Core.DataStorage;
-using HookGenExtender.Core.DataStorage.ExtremelySpecific;
 using System.Diagnostics;
 using HookGenExtender.Core.Utils.Ext;
+using Void = HookGenExtender.Core.DataStorage.ExtremelySpecific.Void;
 
 namespace HookGenExtender.Core.ILGeneration {
 
@@ -89,9 +89,9 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// Creates, but does <strong>NOT</strong> emit, <see cref="OpCodes.Nop"/>. 
 		/// This is done with the intent of the nop being used as a destination for branches.
 		/// <para/>
-		/// This instruction's operand is the <see cref="CilBody"/> that this is called with. This enforces
-		/// that you must use <see cref="ExtendedCILBody.OptimizeNopJumps(CilBody)"/> before emitting to the DLL file
-		/// otherwise an exception will occur.
+		/// This instruction's operand is the <see cref="CilBody"/> that this is called with.<para/>
+		/// This allows you to (more, <em>requires</em> you to) optimize this nop out via 
+		/// <see cref="ExtendedCILBody.OptimizeNopJumps(CilBody, bool)"/>.
 		/// </summary>
 		/// <returns></returns>
 		public static Instruction NewBrDest(this CilBody body) {
@@ -139,7 +139,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <returns>The first instruction of the generated code.</returns>
 		/// <param name="body"></param>
 		/// <param name="method"></param>
-		public static Instruction EmitMethodof(this CilBody body, ExtensiblesGenerator main, IMethod method) {
+		public static Instruction EmitMethodof(this CilBody body, ExtensiblesGenerator main, IMemberRef method) {
 			// TO FUTURE XAN: In case you come back and wonder, no, MethodSig is not valid here.
 			Instruction first = body.Emit(OpCodes.Ldtoken, method);
 			body.EmitCall(main.Shared.GetMethodFromHandle);
@@ -177,7 +177,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			Instruction first = null;
 
 			main.Shared.DynamicallyImport(typeof(T), out ITypeDefOrRef exceptionRef, out TypeSig exceptionSig);
-			MemberRef ctor = main.Shared.DynamicallyReferenceMethod(exceptionRef, ".ctor", () => MethodSig.CreateInstance(main.CorLibTypeSig(), main.CorLibTypeSig<string>()));
+			MemberRef ctor = main.Shared.DynamicallyReferenceMethod(exceptionRef, ".ctor", () => MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), main.CorLibTypeSig<string>()));
 
 			if (message != null) first = body.Emit(OpCodes.Ldstr, message);
 			Instruction second = body.Emit(OpCodes.Newobj, ctor);
