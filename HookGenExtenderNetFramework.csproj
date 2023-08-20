@@ -108,20 +108,7 @@
     <None Include="MirrorGenerator.cs" />
     <Compile Include="Core\Utils\MemberMutation\MethodMutator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <None Include="LEGACY\BinderOwnerHelper.cs" />
-    <None Include="LEGACY\Extensions.cs" />
-    <None Include="LEGACY\ILUtilities.cs" />
-    <None Include="LEGACY\ILGeneratorParts\BepInExExtensibles.cs" />
-    <None Include="LEGACY\ILGeneratorParts\CommonMembers.cs" />
-    <None Include="LEGACY\ILGenerators.cs" />
     <Compile Include="Core\ImportCache.cs" />
-    <None Include="LEGACY\Representations\BIEHookRef.cs" />
-    <None Include="LEGACY\Representations\BIEProxiedPropertyResult.cs" />
-    <None Include="LEGACY\Representations\CompleteHookWrapper.cs" />
-    <None Include="LEGACY\Representations\SignatureBoundMemberDef.cs" />
-    <None Include="LEGACY\Shared\ReusableSignatureContainer.cs" />
-    <None Include="LEGACY\Shared\SharedBinderSignatures.cs" />
-    <None Include="LEGACY\Shared\SharedGeneralSignatures.cs" />
     <Compile Include="Core\Utils\ShittyDocumentationGenerator.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -28,7 +28,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			ctorBody.EmitThis();
 			ctorBody.Emit(OpCodes.Ldarg_1);						// original
 			ctorBody.EmitNew(newWeakReference);					// new WeakReference<T>(original)
-			ctorBody.Emit(OpCodes.Stfld, storage);				// this.<Extensible>original = ^
+			ctorBody.Emit(OpCodes.Stfld, storage.Definition);	// this.<Extensible>original = ^
 			ctorBody.EmitRet();
 			ctorBody.FinalizeMethodBody(main);
 			#endregion
@@ -39,7 +39,8 @@ namespace HookGenExtender.Core.ILGeneration {
 			Local result = new Local(type.ImportedGameTypeSig, "result");
 			getterBody.SetLocals(result);
 
-			getterBody.EmitLdThisFldAuto(storage);                  // this.<Extensible>original
+			getterBody.EmitThis();
+			getterBody.Emit(OpCodes.Ldfld, storage.Definition);	// this.<Extensible>original
 			getterBody.EmitLdloc(result, true);		// out original
 			getterBody.EmitCallvirt(tryGetTarget);				// TryGetTarget
 			getterBody.Emit(OpCodes.Pop);                       // Pop (true/false result)
@@ -92,10 +93,10 @@ namespace HookGenExtender.Core.ILGeneration {
 			#region Bindings Field
 			// Start by setting up the bindings field.
 			cctor.EmitNew(bindingsFieldType.ReferenceExistingMethod(".ctor", main.Shared.CWTCtorSig));
-			cctor.Emit(OpCodes.Stsfld, bindings);
+			cctor.Emit(OpCodes.Stsfld, bindings.Reference);
 			cctor.EmitLdc_I4(binderMembers.type._originalGameType.FindInstanceConstructors().Count() + 1);
 			cctor.Emit(OpCodes.Newarr, main.Shared.ConstructorInfoReference);
-			cctor.Emit(OpCodes.Stsfld, ctorCache);
+			cctor.Emit(OpCodes.Stsfld, ctorCache.Reference);
 			#endregion
 
 			// Now some validation
@@ -220,7 +221,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			#region TryReleaseBinding
 			CilBody tryReleaseBindingBody = tryReleaseBinding.GetOrCreateBody();
-			tryReleaseBindingBody.EmitLdThisFldAuto(bindings);
+			tryReleaseBindingBody.Emit(OpCodes.Ldsfld, bindings.Reference);
 			tryReleaseBindingBody.EmitLdarg(0);
 			tryReleaseBindingBody.EmitCallvirt(bindingsFieldType.ReferenceExistingMethod("Remove", main.Shared.CWTRemoveSig));
 			tryReleaseBindingBody.EmitRet();
@@ -230,7 +231,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			#region TryGetBinding
 			CilBody tryGetBindingBody = tryGetBinding.GetOrCreateBody();
-			tryGetBindingBody.EmitLdThisFldAuto(bindings);
+			tryGetBindingBody.Emit(OpCodes.Ldsfld, bindings.Reference);
 			tryGetBindingBody.EmitLdarg(0);
 			tryGetBindingBody.EmitLdarg(1, false); // Reminder: It's already a by-ref type. Don't ref the ref.
 			tryGetBindingBody.EmitCallvirt(bindingsFieldType.ReferenceExistingMethod("TryGetValue", main.Shared.CWTTryGetValueSig));

@@ -151,8 +151,8 @@ namespace HookGenExtender.Core.ILGeneration {
 			);
 
 			CilBody getter = prop.Getter.GetOrCreateBody();
-			getter.EmitLdarg(0);
-			getter.EmitCall(coreMembers.originalObjectProxy.Getter);
+			getter.EmitThis();
+			getter.EmitCall(coreMembers.originalObjectProxy.Getter.Reference);
 			getter.Emit(isReadOnly ? OpCodes.Ldfld : OpCodes.Ldflda, original.Reference);
 			getter.EmitRet();
 			getter.FinalizeMethodBody(main);
@@ -207,30 +207,33 @@ namespace HookGenExtender.Core.ILGeneration {
 			Instruction callOrig_Destination = proxyBody.NewBrDest();
 
 			// if (del == null) {
-			proxyBody.EmitLdThisFldAuto(origDelegateRef);
+			proxyBody.EmitThis();
+			proxyBody.Emit(OpCodes.Ldfld, origDelegateRef.Definition);
 			proxyBody.EmitNull();
 			proxyBody.Emit(OpCodes.Ceq);
 			proxyBody.EmitStoreThenLoad(isInManualCall);
-			proxyBody.Emit(OpCodes.Brfalse, callOrig_Destination); 
+			proxyBody.Emit(OpCodes.Brfalse, callOrig_Destination);
 			// above would go to validateDelegateIntegrity_Destination, but it just does another branch with the same result.
 			///////////////////////////////
 
 			// if (!isCallerInInvocation) {
-			proxyBody.EmitLdThisFldAuto(isCallerInInvocation);
+			proxyBody.EmitThis();
+			proxyBody.Emit(OpCodes.Ldfld, isCallerInInvocation.Definition);
 			proxyBody.Emit(OpCodes.Brtrue, throwMissingDelegateException);
 			///////////////////////////////
 
 			proxyBody.EmitThis();
 			proxyBody.EmitValue(true);
-			proxyBody.Emit(OpCodes.Stfld, isCallerInInvocation);				// isCallerInInvocation = true
+			proxyBody.Emit(OpCodes.Stfld, isCallerInInvocation.Definition);                // isCallerInInvocation = true
 
-			proxyBody.EmitGetPropAuto(coreMembers.originalObjectProxy);         // this.Original...
+			proxyBody.EmitThis();
+			proxyBody.EmitCallvirt(coreMembers.originalObjectProxy.Definition); // this.Original...
 			proxyBody.EmitAmountOfArgs(numGameParams, 1, false);			// All args of method
 			proxyBody.Emit(OpCodes.Callvirt, originalGameMethod.Reference);		// ... .Method()
 
 			proxyBody.EmitThis();
 			proxyBody.EmitValue(false);
-			proxyBody.Emit(OpCodes.Stfld, isCallerInInvocation);				// isCallerInInvocation = false
+			proxyBody.Emit(OpCodes.Stfld, isCallerInInvocation.Definition);				// isCallerInInvocation = false
 
 			proxyBody.EmitRet();
 			// }
@@ -240,8 +243,10 @@ namespace HookGenExtender.Core.ILGeneration {
 			// }
 			proxyBody.Emit(callOrig_Destination);
 
-			proxyBody.EmitLdThisFldAuto(origDelegateRef);									// orig
-			proxyBody.EmitGetPropAuto(coreMembers.originalObjectProxy, false);   // this.Original (arg 0)
+			proxyBody.EmitThis();
+			proxyBody.Emit(OpCodes.Ldfld, origDelegateRef.Definition);                                  // orig
+			proxyBody.EmitThis();
+			proxyBody.EmitCallvirt(coreMembers.originalObjectProxy.Definition);   // this.Original (arg 0)
 			proxyBody.EmitAmountOfArgs(numGameParams, 1, false);							// All args of method (arg 1, ...)
 			proxyBody.EmitCall(origDelegateType.Invoke);									// Call orig(self, ...)
 			proxyBody.EmitRet();

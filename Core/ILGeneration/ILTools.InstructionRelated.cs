@@ -290,10 +290,12 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// Emits code that loads the provided field from the current type. It will automatically emit the proper opcode(s) based on whether or not the field is static.
 		/// </summary>
 		/// <param name="body"></param>
-		/// <param name="memberRef"></param>
+		/// <param name="byReference"></param>
+		/// <param name="useDefinition">If null, the system will try to guess whether or not using the property definition is possible. Otherwise, setting this to false will always use the reference, and true will always use the definition.</param>
 		/// <returns></returns>
 		/// <returns>The first instruction of the generated code.</returns>
-		public static Instruction EmitLdThisFldAuto(this CilBody body, FieldDefAndRef field, bool byReference = false) {
+		[Obsolete("Do not use this, due to ambiguous behavior. Manually emit the field load with the definition or reference based on what is appropriate.", true)]
+		public static Instruction EmitLdThisFldAuto(this CilBody body, FieldDefAndRef field, bool byReference = false, bool? useDefinition = null) {
 			OpCode load;
 			Instruction first = null;
 			if (field.Definition.IsStatic) {
@@ -302,7 +304,19 @@ namespace HookGenExtender.Core.ILGeneration {
 				load = byReference ? OpCodes.Ldflda : OpCodes.Ldfld;
 				first = body.Emit(OpCodes.Ldarg_0);
 			}
-			Instruction second = body.Emit(load, field.Reference);
+			object defOrRef;
+			if (useDefinition == null) {
+				if (field.Definition.FieldType.DefinitionAssembly == field.Generator.Extensibles.Assembly) {
+					defOrRef = field.Definition;
+				} else {
+					defOrRef = field.Reference;
+				}
+			} else if (useDefinition.Value) {
+				defOrRef = field.Definition;
+			} else {
+				defOrRef = field.Reference;
+			}
+			Instruction second = body.Emit(load, defOrRef);
 			return first ?? second;
 		}
 
@@ -312,8 +326,10 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="body"></param>
 		/// <param name="property"></param>
 		/// <param name="explicitCall">If true, this MUST be an explicit call (<see cref="OpCodes.Call"/>). This should be true when the goal is to use <see langword="base"/>.Property</param>
+		/// <param name="useDefinition">If null, the system will try to guess whether or not using the property definition is possible. Otherwise, setting this to false will always use the reference, and true will always use the definition.</param>
 		/// <returns>The first instruction of the generated code.</returns>
-		public static Instruction EmitGetPropAuto(this CilBody body, PropertyDefAndRef property, bool explicitCall = false) {
+		[Obsolete("Do not use this, due to ambiguous behavior. Manually emit the property with the definition or reference based on what is appropriate.", true)]
+		public static Instruction EmitGetPropAuto(this CilBody body, PropertyDefAndRef property, bool explicitCall = false, bool? useDefinition = null) {
 			OpCode call;
 			Instruction first = null;
 			if (property.Getter == null) throw new InvalidOperationException($"The provided property ({property.Definition.FullName}) does not have a getter.");
@@ -323,47 +339,21 @@ namespace HookGenExtender.Core.ILGeneration {
 				call = OpCodes.Callvirt;
 				first = body.EmitThis();
 			}
-			Instruction second = body.Emit(call, property.Getter.Reference);
-			return first ?? second;
-		}
-
-		/// <summary>
-		/// Emits code that calls the setter of the provided property.
-		/// <para/>
-		/// <strong>Unlike <see cref="EmitGetPropAuto(CilBody, PropertyDefAndRef)"/>, this can NOT automatically emit the full code.</strong>
-		/// If the property is an instance property, you must invoke <see cref="EmitThis(CilBody)"/> followed by the code to push the value on the stack.
-		/// <para/>
-		/// <strong>This only emits the appropriate call type (call vs. callvirt based on whether or not the property is static) and nothing else.</strong>
-		/// </summary>
-		/// <param name="body"></param>
-		/// <param name="property"></param>
-		/// <param name="explicitCall">If true, this MUST be an explicit call (<see cref="OpCodes.Call"/>). This should be true when the goal is to use <see langword="base"/>.Property</param>
-		/// <returns>The first instruction of the generated code.</returns>
-		public static Instruction EmitSetProp(this CilBody body, PropertyDefAndRef property, bool explicitCall = false) {
-			OpCode call;
-			if (property.Setter == null) throw new InvalidOperationException($"The provided property ({property.Definition.FullName}) does not have a setter.");
-			if (property.Definition.IsStatic() || explicitCall) {
-				call = OpCodes.Call;
+			object defOrRef;
+			if (useDefinition == null) {
+				if (property.Getter.Definition.DeclaringType?.DefinitionAssembly == property.Getter.Generator.Extensibles.Assembly) {
+					defOrRef = property.Getter.Definition;
+				} else {
+					defOrRef = property.Getter.Reference;
+				}
+			} else if (useDefinition.Value) {
+				defOrRef = property.Getter.Definition;
 			} else {
-				call = OpCodes.Callvirt;
+				defOrRef = property.Getter.Reference;
 			}
-			return body.Emit(call, property.Setter.Reference);
-		}
 
-		/// <summary>
-		/// Emits either <see cref="OpCodes.Call"/> or <see cref="OpCodes.Callvirt"/> depending on whether or not the method is static.
-		/// If the method is not static, <see cref="OpCodes.Callvirt"/> is emitted, unless <paramref name="noVTable"/> is <see langword="true"/> 
-		/// from which <see cref="OpCodes.Call"/> is emitted instead.
-		/// </summary>
-		/// <param name="body"></param>
-		/// <param name="method"></param>
-		/// <param name="noVTable"></param>
-		/// <returns></returns>
-		/// <returns>The first instruction of the generated code.</returns>
-		public static Instruction EmitCallAuto(this CilBody body, MethodDefAndRef method, bool noVTable = false) {
-			bool canCallVirt = !method.Definition.IsStatic && !noVTable;
-			if (canCallVirt) return body.Emit(OpCodes.Callvirt, method.Reference);
-			return body.Emit(OpCodes.Call, method.Reference);
+			Instruction second = body.Emit(call, defOrRef);
+			return first ?? second;
 		}
 
 		/// <summary>
@@ -388,6 +378,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="body"></param>
 		/// <param name="method"></param>
 		/// <returns></returns>
+		[Obsolete("Explicitly reference the Reference or Definition property of this object.", true)]
 		public static Instruction EmitCall(this CilBody body, IMemberDefAndRef method) => body.Emit(OpCodes.Call, method);
 
 		/// <summary>
@@ -396,6 +387,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="body"></param>
 		/// <param name="method"></param>
 		/// <returns></returns>
+		[Obsolete("Explicitly reference the Reference or Definition property of this object.", true)]
 		public static Instruction EmitCallvirt(this CilBody body, IMemberDefAndRef method) => body.Emit(OpCodes.Callvirt, method);
 
 		/// <summary>

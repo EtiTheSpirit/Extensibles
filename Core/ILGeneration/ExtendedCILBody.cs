@@ -6,6 +6,7 @@ using HookGenExtender.Core.Utils.Ext;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Remoting;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -22,10 +23,10 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// </summary>
 		public static void BakeDefRefsDown(this CilBody body) {
 			foreach (Instruction i in body.Instructions) {
-				if (i.Operand is IHasTypeDefOrRef df) {
+				if (i.Operand is IMemberDefAndRef dr) {
+					throw new InvalidOperationException($"Instruction {i} uses a MemberDefAndRef. Directly access its Definition or Reference property.");
+				} else if (i.Operand is IHasTypeDefOrRef df) {
 					i.Operand = df.Reference;
-				} else if (i.Operand is IMemberDefAndRef dr) {
-					i.Operand = dr.Reference;
 				}
 			}
 		}
@@ -134,9 +135,17 @@ namespace HookGenExtender.Core.ILGeneration {
 			body.UpdateInstructionOffsets();
 			foreach (Instruction i in body.Instructions) {
 				if (i.Operand is IMemberDef mbrDef) {
-					if (mbrDef.Module != main.Extensibles) throw new InvalidOperationException("You are using the definition of another module's member!");
+					if (mbrDef.DeclaringType != null && mbrDef.DeclaringType.Module != main.Extensibles) throw new InvalidOperationException("You are using the definition of another module's member!");
 				} else if (i.Operand is TypeDef typeDef) {
-					if (typeDef.Module != main.Extensibles) throw new InvalidOperationException("You are using the definition of another module's type!");
+					if (typeDef.Module != null && typeDef.Module != main.Extensibles) throw new InvalidOperationException("You are using the definition of another module's type!");
+				} else if (i.Operand is IMemberRef mbrRef) {
+					if (mbrRef.DeclaringType != null) {
+						if (mbrRef.DeclaringType.DefinitionAssembly == main.Extensibles.Assembly && !mbrRef.IsMethodDef && !mbrRef.IsFieldDef && !mbrRef.IsPropertyDef && !mbrRef.IsTypeDef) {
+							if (mbrRef.IsTypeRef && ((MemberRef)mbrRef).Class is ITypeDefOrRef tdor && tdor.NumberOfGenericParameters == 0) {
+								throw new InvalidOperationException($"One of the operands of an instruction is a reference to a declared type. Use the definition instead! Operand: {mbrRef}");
+							}
+						}
+					}
 				}
 			}
 

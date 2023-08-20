@@ -94,7 +94,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			body.EmitLdarg(1);                                          // self
 			body.EmitLdloc(extensibleInstance, true);               // extensibleInstance (var)
-			body.EmitCallvirt(binderMembers.tryGetBindingMethod);           // => TryGetBinding(self, out extensibleInstance)
+			body.EmitCallvirt(binderMembers.tryGetBindingMethod.Reference);           // => TryGetBinding(self, out extensibleInstance)
 			Instruction callOrig = body.NewBrDest();
 			Instruction ret = new Instruction(OpCodes.Ret);
 			body.Emit(OpCodes.Brfalse, callOrig); // Skip if there is no binding.
@@ -103,17 +103,17 @@ namespace HookGenExtender.Core.ILGeneration {
 			// First, tell the extensible type that a BIE hook is executing:
 			body.EmitLdloc(extensibleInstance);
 			body.EmitLdarg(0);
-			body.Emit(OpCodes.Stfld, extensibleMethodProxyMembers.origDelegateReference);
+			body.Emit(OpCodes.Stfld, extensibleMethodProxyMembers.origDelegateReference.Reference);
 
 			// Load all applicable args and call the extensible's declared override.
 			body.EmitLdloc(extensibleInstance);
 			body.EmitAmountOfArgs(numArgsForProxyCall, 0, false);
-			body.Emit(OpCodes.Callvirt, extensibleMethodProxyMembers.proxyMethod);
+			body.Emit(OpCodes.Callvirt, extensibleMethodProxyMembers.proxyMethod.Reference);
 
 			// Now remove the delegate reference.
 			body.EmitLdloc(extensibleInstance);
 			body.EmitNull();
-			body.Emit(OpCodes.Stfld, extensibleMethodProxyMembers.origDelegateReference);
+			body.Emit(OpCodes.Stfld, extensibleMethodProxyMembers.origDelegateReference.Reference);
 
 			// Jump to the return.
 			body.Emit(OpCodes.Br, ret);
@@ -142,7 +142,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="binderMembers"></param>
 		public static void InitializeCreateBindingsMethod(ExtensiblesGenerator main, in ExtensibleBinderCoreMembers binderMembers) {
 			CilBody createBindings = binderMembers.createBindingsMethod.GetOrCreateBody();
-			createBindings.EmitLdThisFldAuto(binderMembers.hasCreatedBindingsField);
+			createBindings.Emit(OpCodes.Ldsfld, binderMembers.hasCreatedBindingsField.Reference);
 			Instruction needsNewBindings = createBindings.NewBrDest();
 			createBindings.Emit(OpCodes.Brfalse, needsNewBindings);
 			createBindings.EmitRet();
@@ -264,7 +264,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 				createBindings.EmitUnityDbgLog(main, $"[Extensible] Moving up the hierarchy; hooking members of type {{{parent.ImportedGameType.FullName}}}...");
 				createBindings.EmitLdarg(0);
-				createBindings.EmitCall(parentCreate);
+				createBindings.EmitCall(parentCreate.Reference);
 			}
 			createBindings.EmitUnityDbgLog(main, $"[Extensible] Finished hooking members of type {{{type.ImportedGameType.FullName}}}.");
 

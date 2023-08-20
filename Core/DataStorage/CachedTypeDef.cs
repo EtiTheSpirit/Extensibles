@@ -94,7 +94,7 @@ namespace HookGenExtender.Core.DataStorage {
 			BaseModule = main.Extensibles;
 			Underlying = new TypeDefUser(name);
 			Underlying.Attributes = attrs;
-			//Reference = new TypeRefUser(inModule, name);
+			//Reference = main.Cache.Import(Underlying);
 			BaseModule.Types.Add(Underlying);
 		}
 
@@ -104,7 +104,7 @@ namespace HookGenExtender.Core.DataStorage {
 			Underlying = new TypeDefUser(@namespace, name);
 			Underlying.Attributes = attrs;
 			Signature = Underlying.ToTypeSig();
-			//Reference = new TypeRefUser(inModule, @namespace, name);
+			//Reference = main.Cache.Import(Underlying);
 			BaseModule.Types.Add(Underlying);
 		}
 
@@ -114,7 +114,7 @@ namespace HookGenExtender.Core.DataStorage {
 			Underlying = new TypeDefUser(name, baseType);
 			Underlying.Attributes = attrs;
 			Signature = Underlying.ToTypeSig();
-			//Reference = new TypeRefUser(inModule, name);
+			//Reference = main.Cache.Import(Underlying);
 			BaseModule.Types.Add(Underlying);
 		}
 
@@ -124,7 +124,7 @@ namespace HookGenExtender.Core.DataStorage {
 			Underlying = new TypeDefUser(@namespace, name, baseType);
 			Underlying.Attributes = attrs;
 			Signature = Underlying.ToTypeSig();
-			//Reference = new TypeRefUser(inModule, @namespace, name);
+			//Reference = main.Cache.Import(Underlying);
 			BaseModule.Types.Add(Underlying);
 		}
 
@@ -138,6 +138,7 @@ namespace HookGenExtender.Core.DataStorage {
 			BaseModule = main.Extensibles;
 			Underlying = from;
 			Signature = Underlying.ToTypeSig();
+			// Reference = main.Cache.Import(Underlying);
 			if (!BaseModule.Types.Contains(Underlying)) {
 				BaseModule.Types.Add(Underlying);
 			}
@@ -188,7 +189,6 @@ namespace HookGenExtender.Core.DataStorage {
 			_richPropertiesCache = null;
 			Underlying.Properties.Add(property.Definition);
 			property.Owner = this;
-
 			if (property.Getter != null) AddMethod(property.Getter);
 			if (property.Setter != null) AddMethod(property.Setter);
 		}

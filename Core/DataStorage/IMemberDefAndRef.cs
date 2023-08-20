@@ -14,6 +14,11 @@ namespace HookGenExtender.Core.DataStorage {
 		ModuleDef Module { get; }
 
 		/// <summary>
+		/// The <see cref="ExtensiblesGenerator"/> where this was created.
+		/// </summary>
+		ExtensiblesGenerator Generator { get; }
+
+		/// <summary>
 		/// The declaration of the defined member.
 		/// <para/>
 		/// <strong>WARNING: Changes to this object will NOT be reflected back to this object! Do not modify this object!</strong>

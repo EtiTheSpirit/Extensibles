@@ -116,7 +116,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			#region Ensure binding is not a duplicate
 			bindBody.EmitLdarg(0);
 			bindBody.EmitLdloc(extensibleInstance, true);
-			bindBody.EmitCallvirt(binderMembers.tryGetBindingMethod);
+			bindBody.EmitCallvirt(binderMembers.tryGetBindingMethod.Reference);
 			Instruction bindingIsNotAlreadyPresent = bindBody.NewBrDest();
 			bindBody.Emit(OpCodes.Brfalse, bindingIsNotAlreadyPresent);
 			////
@@ -128,7 +128,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			#region Final Instance Creation
 
 			#region Read and Populate Cache (if needed)
-			bindBody.EmitLdThisFldAuto(binderMembers.constructorCacheField);
+			bindBody.Emit(OpCodes.Ldsfld, binderMembers.constructorCacheField.Reference);
 			bindBody.EmitLdc_I4(constructorIndex);
 			bindBody.Emit(OpCodes.Ldelem, main.Shared.ConstructorInfoReference);
 			bindBody.EmitStoreThenLoad(constructor);
@@ -149,7 +149,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			bindBody.EmitException<MissingMethodException>(main, $"To call this variant of Binder<TExtensible>.Bind(), you must declare a private constructor with identical arguments in your Extensible type.");
 			////////
 			bindBody.Emit(ctorWasFound);
-			bindBody.EmitLdThisFldAuto(binderMembers.constructorCacheField);
+			bindBody.Emit(OpCodes.Ldsfld, binderMembers.constructorCacheField.Reference);
 			bindBody.EmitLdc_I4(constructorIndex);
 			bindBody.EmitLdloc(constructor);
 			bindBody.Emit(OpCodes.Stelem, main.Shared.ConstructorInfoReference);
@@ -179,7 +179,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			// Construct WeakReference<TExtensible>...
 			bindBody.EmitLdloc(extensibleInstance);
 			bindBody.EmitNew(coreMembers.weakReferenceExtensibleType.ReferenceExistingMethod(".ctor", main.Shared.WeakReferenceCtorSig));
-			bindBody.EmitLdThisFldAuto(binderMembers.hasCreatedBindingsField);
+			bindBody.Emit(OpCodes.Ldsfld, binderMembers.hasCreatedBindingsField.Reference);
 			Instruction alreadyCreatedHooks = bindBody.NewBrDest();
 			bindBody.Emit(OpCodes.Brtrue, alreadyCreatedHooks);
 			////
@@ -187,7 +187,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			bindBody.EmitNew(main.Shared.HashSetStringCtor);
 			bindBody.Emit(OpCodes.Call, binderMembers.createBindingsMethod.Reference);
 			bindBody.EmitValue(true);
-			bindBody.Emit(OpCodes.Stsfld, binderMembers.hasCreatedBindingsField);
+			bindBody.Emit(OpCodes.Stsfld, binderMembers.hasCreatedBindingsField.Reference);
 			////
 			bindBody.Emit(alreadyCreatedHooks);
 			bindBody.EmitRet();

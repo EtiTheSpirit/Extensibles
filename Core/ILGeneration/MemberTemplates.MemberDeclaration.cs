@@ -131,7 +131,8 @@ namespace HookGenExtender.Core.ILGeneration {
 			cast.Definition.IsNoInlining = false;
 			CilBody body = cast.GetOrCreateBody();
 			PropertyDefAndRef org = currentType.ExtensibleType.RichProperties.FirstOrDefault(prop => prop.Definition.Name == "<Extensible>Original");
-			body.EmitGetPropAuto(org); // This actually works (it emits "this" which is arg 0, which is conveniently the reference to the extensible type anyway)
+			body.EmitThis();
+			body.EmitCallvirt(org.Definition); // This actually works (it emits "this" which is arg 0, which is conveniently the reference to the extensible type anyway)
 			body.EmitRet(); // gg ez
 			body.FinalizeMethodBody(main);
 			makeMemberWithin.ExtensibleType.AddMethod(cast);

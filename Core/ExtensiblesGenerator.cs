@@ -105,7 +105,7 @@ namespace HookGenExtender.Core {
 			Extensibles.RuntimeVersion = Original.RuntimeVersion;
 			Extensibles.Kind = ModuleKind.Dll;
 
-			_asm = new AssemblyDefUser($"EXTENSIBLES-{gameAssembly.Name}", new Version("1.0.0.0"));
+			_asm = new AssemblyDefUser($"EXTENSIBLES-{gameAssembly.Name}", CURRENT_EXTENSIBLES_VERSION);
 			_asm.ProcessorArchitecture = AssemblyAttributes.PA_MSIL;
 			_asm.Modules.Add(Extensibles);
 
@@ -180,7 +180,7 @@ namespace HookGenExtender.Core {
 				
 				CachedTypeDef binder = new CachedTypeDef(this, "Binder`1", TypeAttributes.Sealed | TypeAttributes.Abstract | TypeAttributes.NestedPublic | TypeAttributes.AutoLayout | TypeAttributes.AnsiClass);
 				GenericParam binderGeneric = new GenericParamUser(0, GenericParamAttributes.NonVariant, "TExtensible");
-				binderGeneric.GenericParamConstraints.Add(new GenericParamConstraintUser(replacement.Reference));
+				binderGeneric.GenericParamConstraints.Add(new GenericParamConstraintUser(replacement.Underlying));
 				binder.GenericParameters.Add(binderGeneric);
 
 				binder.Underlying.DeclaringType2 = replacement.Underlying;
