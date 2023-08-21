@@ -135,6 +135,9 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// Note that there is no such thing as "<see langword="methodof"/>", this is made up as a way of 
 		/// representing "returns a <see cref="MethodInfo"/> from a method signature", much like how
 		/// <see langword="typeof"/> returns a <see cref="Type"/> from a type signature.
+		/// <para/>
+		/// <strong>This does not support methods on generic types, even if it's a reference.</strong>
+		/// For this purpose, use <see cref="EmitMethodofWithType(CilBody, ExtensiblesGenerator, IMemberRef, ITypeDefOrRef)"/>
 		/// </summary>
 		/// <returns>The first instruction of the generated code.</returns>
 		/// <param name="body"></param>
@@ -143,6 +146,25 @@ namespace HookGenExtender.Core.ILGeneration {
 			// TO FUTURE XAN: In case you come back and wonder, no, MethodSig is not valid here.
 			Instruction first = body.Emit(OpCodes.Ldtoken, method);
 			body.EmitCall(main.Shared.GetMethodFromHandle);
+			return first;
+		}
+
+		/// <summary>
+		/// Emits the code equivalent to <see langword="methodof"/>(<paramref name="method"/>).<br/>
+		/// Note that there is no such thing as "<see langword="methodof"/>", this is made up as a way of 
+		/// representing "returns a <see cref="MethodInfo"/> from a method signature", much like how
+		/// <see langword="typeof"/> returns a <see cref="Type"/> from a type signature.
+		/// <para/>
+		/// This variant calls <see cref="MethodBase.GetMethodFromHandle(RuntimeMethodHandle, RuntimeTypeHandle)"/> which 
+		/// notably requires a reference to its declaring type as well.
+		/// </summary>
+		/// <returns>The first instruction of the generated code.</returns>
+		/// <param name="body"></param>
+		/// <param name="method"></param>
+		public static Instruction EmitMethodofWithType(this CilBody body, ExtensiblesGenerator main, IMemberRef method, ITypeDefOrRef type) {
+			Instruction first = body.Emit(OpCodes.Ldtoken, method);
+			body.Emit(OpCodes.Ldtoken, type);
+			body.EmitCall(main.Shared.GetMethodFromHandleAndType);
 			return first;
 		}
 
@@ -585,6 +607,39 @@ namespace HookGenExtender.Core.ILGeneration {
 			body.EmitStloc(countVariable);
 			body.Emit(OpCodes.Br, continueJump);
 			body.Emit(breakJump);
+			return first;
+		}
+
+		/// <summary>
+		/// Assuming the current value on the stack is an <see cref="int"/>, this will emit whether or not the provided integer &amp; <paramref name="flag"/> is nonzero (at least one flag must match).<br/>
+		/// If <paramref name="matchAll"/> is true, the provided integer &amp; <paramref name="flag"/> must equal the flag instead (all flags must match).
+		/// <para/>
+		/// If <paramref name="jumpTo"/> is defined, this will perform a jump to that instruction. If it is null, this method will leave behind 0 or 1 on the stack.
+		/// </summary>
+		/// <param name="body"></param>
+		/// <param name="flag"></param>
+		/// <param name="jumpTo">If declared, this will jump instead of push 1 or 0 onto the stack</param>
+		/// <param name="matchAll">If false, the current int on the stack &amp; <paramref name="flag"/> must be nonzero. If true, it must be equal to <paramref name="flag"/> (have all flags set).</param>
+		/// <returns></returns>
+		public static Instruction EmitHasFlag(this CilBody body, int flag, Instruction jumpTo = null, bool matchAll = false) {
+			// Imagine: <current stack int value>
+			Instruction first = body.EmitLdc_I4(flag);
+			body.Emit(OpCodes.And);
+			if (matchAll) {
+				body.EmitLdc_I4(flag);
+				if (jumpTo == null) {
+					body.Emit(OpCodes.Ceq);         // value == flag
+				} else {
+					body.Emit(OpCodes.Beq, jumpTo);
+				}
+			} else {
+				body.EmitLdc_I4(0);
+				if (jumpTo == null) {
+					body.Emit(OpCodes.Clt);         // 0 < value
+				} else {
+					body.Emit(OpCodes.Blt, jumpTo);
+				}
+			}
 			return first;
 		}
 
