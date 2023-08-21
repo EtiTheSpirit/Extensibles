@@ -33,7 +33,7 @@ namespace HookGenExtender.Core {
 		/// <summary>
 		/// The version of the current Extensibles module. This is used by the generator to determine if the existing DLL in the BepInEx folder is outdated.
 		/// </summary>
-		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(2, 0, 0, 0);
+		public static readonly Version CURRENT_EXTENSIBLES_VERSION = new Version(2, 1, 0, 0);
 
 		/// <summary>
 		/// The original module that is being mirrored.
@@ -355,7 +355,6 @@ namespace HookGenExtender.Core {
 				PropertyDefAndRef propertyInstance = new PropertyDefAndRef(this, property, extensible.ImportedGameType, true);
 
 				ProxyAndHookPackage proxyAndHook = MemberTemplates.MakeExtensiblePropertyProxies(this, propertyInstance, in coreMembers);
-				// PropertyDefAndRef proxyProperty = proxyAndHook.property;
 				(MethodDefAndRef extBinderGetter, MethodDefAndRef extBinderSetter) = MemberTemplates.CodeBinderPropertyHooks(this, in coreMembers, in binderMembers, in proxyAndHook);
 				string name = property.Name;
 				if (extBinderGetter != null) {

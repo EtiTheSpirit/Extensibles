@@ -177,9 +177,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <returns></returns>
 		private static ExtensibleMethodProxyMembers CommonMakeExtensibleProxy(ExtensiblesGenerator main, in ExtensibleCoreMembers coreMembers, MethodDefAndRef originalGameMethod, IDelegateTypeWrapper origDelegateType) {
 			MethodDefAndRef proxyMethod = originalGameMethod.Definition.CloneMethodDeclarationFromGame(main, coreMembers);
-			proxyMethod.Definition.Attributes |= MethodAttributes.Virtual;
-			proxyMethod.Definition.Attributes &= ~MethodAttributes.Private;
-			proxyMethod.Definition.Attributes |= MethodAttributes.Public;
+			proxyMethod.Definition.Attributes = MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.ReuseSlot;
 
 			FieldDefAndRef isCallerInInvocation = new FieldDefAndRef(main, $"<{originalGameMethod.Name}>isCallerInInvocation", new FieldSig(main.CorLibTypeSig<bool>()), coreMembers.type.ExtensibleType.Reference, CommonAttributes.SPECIAL_LOCKED_FIELD);
 			FieldDefAndRef origDelegateRef = new FieldDefAndRef(main, $"<{originalGameMethod.Name}>origDelegateRef", new FieldSig(origDelegateType.Signature), coreMembers.type.ExtensibleType.Reference, CommonAttributes.SPECIAL_LOCKED_FIELD);
