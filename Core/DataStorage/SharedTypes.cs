@@ -43,12 +43,17 @@ namespace HookGenExtender.Core.DataStorage {
 		public MethodSig WeakRefTryGetTargetSig { get; }
 
 		/// <summary>
+		/// The actual method <see cref="WeakReference{T}.TryGetTarget(out T)"/> where <c>T</c> is <c>!0</c> (the first generic arg of the class or struct that this is within).
+		/// </summary>
+		public MemberRef WeakRefTryGetTargetArg0Reference { get; }
+
+		/// <summary>
 		/// An instance of <see cref="WeakReference{T}"/> where <c>T</c> is <c>!0</c> (the first generic arg of the class or struct that this is within).
 		/// </summary>
 		public GenericInstanceTypeDef WeakReferenceGenericArg0 { get; }
 
 		/// <summary>
-		/// The signature of <see langword="new"/> <see cref="WeakReference{T}(T)"/> where <c>T</c> is <c>!0</c>.
+		/// The signature of <see langword="new"/> <see cref="WeakReference{T}(T)"/> where <c>T</c> is <c>!0</c> (the first generic arg of the class or struct that this is within).
 		/// </summary>
 		public MemberRef WeakReferenceCtorGenericArg0Reference { get; }
 
@@ -494,6 +499,7 @@ namespace HookGenExtender.Core.DataStorage {
 			WeakReferenceCtorSig = MethodSig.CreateInstance(main.CorLibTypeSig<Void>(), CommonGenericArgs.TYPE_ARG_0);
 			WeakRefTryGetTargetSig = MethodSig.CreateInstance(main.CorLibTypeSig<bool>(), CommonGenericArgs.BYREF_TYPE_ARG_0);
 			WeakReferenceGenericArg0 = new GenericInstanceTypeDef(main, WeakReference, CommonGenericArgs.TYPE_ARG_0);
+			WeakRefTryGetTargetArg0Reference = WeakReferenceGenericArg0.ReferenceExistingMethod("TryGetTarget", WeakRefTryGetTargetSig);
 			WeakReferenceCtorGenericArg0Reference = WeakReferenceGenericArg0.ReferenceExistingMethod(".ctor", WeakReferenceCtorSig);
 
 			main.Cache.ImportForReferenceAndSignature(typeof(ConditionalWeakTable<,>), out ITypeDefOrRef cwtRef, out TypeSig cwtSig);

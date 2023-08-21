@@ -179,7 +179,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			// Construct WeakReference<TExtensible>...
 			bindBody.EmitLdloc(extensibleInstance);
-			bindBody.EmitNew(coreMembers.weakReferenceExtensibleType.ReferenceExistingMethod(".ctor", main.Shared.WeakReferenceCtorSig));
+			bindBody.EmitNew(main.Shared.WeakReferenceCtorGenericArg0Reference);
 			bindBody.Emit(OpCodes.Ldsfld, binderMembers.hasCreatedBindingsField.Reference);
 			Instruction alreadyCreatedHooks = bindBody.NewBrDest();
 			bindBody.Emit(OpCodes.Brtrue, alreadyCreatedHooks);

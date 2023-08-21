@@ -53,7 +53,6 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// </summary>
 		public static ExtensibleCoreMembers MakeExtensibleCoreMembers(ExtensiblesGenerator main, ExtensibleTypeData @in) {
 			GenericInstanceTypeDef weakRefFldType = main.Shared.WeakReference.MakeGenericType(main, @in.ImportedGameTypeSig);
-			GenericInstanceTypeDef weakRefExtensibleFldType = main.Shared.WeakReference.MakeGenericType(main, CommonGenericArgs.TYPE_ARG_0);
 
 			MethodDefAndRef constructor = CreateConstructor(main, @in.ExtensibleType, new NamedTypeSig(@in.ImportedGameTypeSig, "original"));
 			@in.ExtensibleType.AddMethod(constructor);
@@ -73,7 +72,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			);
 			@in.ExtensibleType.AddProperty(weakRefResolver);
 
-			ExtensibleCoreMembers mbrs = new ExtensibleCoreMembers(@in, constructor, weakRefResolver, weakRefResult, weakRefFldType, weakRefExtensibleFldType);
+			ExtensibleCoreMembers mbrs = new ExtensibleCoreMembers(@in, constructor, weakRefResolver, weakRefResult, weakRefFldType);
 			CodeExtensibleCoreMembers(main, mbrs);
 
 			return mbrs;
