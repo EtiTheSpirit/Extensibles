@@ -22,7 +22,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;ASSERT_EXTENSIBLE_TYPES_ARE_SEALED</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Nullable>enable</Nullable>
@@ -63,24 +63,49 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="HookGenExtenderMain.cs" />
-    <Compile Include="MirrorGenerator.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\BepInExHookRef.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\LegacyBIEHookRef.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\ExtensibleBinderCoreMembers.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\ExtensibleMethodProxyMembers.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\ProxyAndHookPackage.cs" />
+    <Compile Include="Core\DataStorage\CachedTypeDef.cs" />
+    <Compile Include="Core\DataStorage\CommonGenericArgs.cs" />
+    <Compile Include="Core\DataStorage\BulkMemberStorage\ExtensibleCoreMembers.cs" />
+    <Compile Include="Core\DataStorage\ExtensibleTypeData.cs" />
+    <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\DelegateTypeDefAndRef.cs" />
+    <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\DelegateTypeRef.cs" />
+    <Compile Include="Core\DataStorage\ExtremelySpecific\DelegateStuff\IDelegateTypeWrapper.cs" />
+    <Compile Include="Core\DataStorage\ExtremelySpecific\Void.cs" />
+    <Compile Include="Core\DataStorage\FieldDefAndRef.cs" />
+    <Compile Include="Core\DataStorage\GenericInstanceTypeDef.cs" />
+    <Compile Include="Core\DataStorage\IHasTypeDefOrRef.cs" />
+    <Compile Include="Core\DataStorage\IMemberDefAndRef.cs" />
+    <Compile Include="Core\DataStorage\MethodDefAndRef.cs" />
+    <Compile Include="Core\DataStorage\NamedTypeSig.cs" />
+    <Compile Include="Core\DataStorage\PropertyDefAndRef.cs" />
+    <Compile Include="Core\DataStorage\SharedTypes.cs" />
+    <Compile Include="Core\ExtensiblesGenerator.cs" />
+    <Compile Include="Core\ILGeneration\CommonAttributes.cs" />
+    <Compile Include="Core\ILGeneration\ExtendedCILBody.cs" />
+    <Compile Include="Core\ILGeneration\ILTools.ObjectRelated.cs" />
+    <Compile Include="Core\ILGeneration\ILTools.InstructionRelated.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.BinderConstructors.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.BinderHooks.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.ExtensibleProxies.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.MemberCoding.cs" />
+    <Compile Include="Core\ILGeneration\MemberTemplates.MemberDeclaration.cs" />
+    <Compile Include="Core\ReferenceHelpers\BepInExTools.cs" />
+    <Compile Include="Core\ReferenceHelpers\GeneralTypeTools.cs" />
+    <Compile Include="Core\Utils\DNLib\FixedSigCloneMethods.cs" />
+    <Compile Include="Core\Utils\DNLib\MaxStackCalculatorReimpl.cs" />
+    <Compile Include="Core\Utils\Ext\GeneralExtensions.cs" />
+    <Compile Include="Core\Utils\Ext\NameConversion.cs" />
+    <Compile Include="Core\Utils\Ext\TypeExtensions.cs" />
+    <None Include="HookGenExtenderMain.cs" />
+    <Compile Include="Core\Utils\MemberMutation\MethodMutator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Utilities\BinderOwnerHelper.cs" />
-    <Compile Include="Utilities\Extensions.cs" />
-    <Compile Include="Utilities\Hooks.cs" />
-    <Compile Include="Utilities\ILGeneratorParts\BepInExExtensibles.cs" />
-    <Compile Include="Utilities\ILGeneratorParts\CommonMembers.cs" />
-    <Compile Include="Utilities\ILGenerators.cs" />
-    <Compile Include="Utilities\ImportCache.cs" />
-    <Compile Include="Utilities\Representations\BIEHookRef.cs" />
-    <Compile Include="Utilities\Representations\BIEProxiedPropertyResult.cs" />
-    <Compile Include="Utilities\Representations\CompleteHookWrapper.cs" />
-    <Compile Include="Utilities\Representations\SignatureBoundMemberDef.cs" />
-    <Compile Include="Utilities\Shared\ReusableSignatureContainer.cs" />
-    <Compile Include="Utilities\Shared\SharedBinderSignatures.cs" />
-    <Compile Include="Utilities\Shared\SharedGeneralSignatures.cs" />
-    <Compile Include="Utilities\ShittyDocumentationGenerator.cs" />
+    <Compile Include="Core\ImportCache.cs" />
+    <Compile Include="Core\Utils\ShittyDocumentationGenerator.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".gitattributes" />

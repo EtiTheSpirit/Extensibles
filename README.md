@@ -15,6 +15,30 @@ This Mixin-like behavior is extremely useful for games like *Rain World* (which 
 
 Extensibles aims to remedy some of the pain of this odd design by allowing you to write your classes as if you are that class.
 
+# Why?
+Well, to be frank... Extensibles *is* just a comically thick boilerplate. The leverage it has over stock hooks varies wildly across games, but in general...
+* Extensibles makes working with discrete objects feel more natural, as access (via hooks) is no longer static.
+	* This might benefit newer modders in some ways, but harm them in others (i.e. its good to understand hooks).
+	* This can also help code cleanlines, especially in games like Rain World that have cluttered types.
+	* This might be more familiar to modders coming from other games, especially Minecraft due to its similarities with Mixin.
+* Extensibles allows automatically hooking properties with this technique (though doing this normally *is* just one line of code).
+
+Overall, the only reason you should choose to use this over any other solution comes down to preference. If the presence of one more dependency and some boilerplate is worth it for convenience, then enjoy, otherwise carry on with your work like normal and pay no mind to this toolkit.
+
+# Limitations
+- **Extensibles is NOT thread safe, and only operates predictably in a single-threaded environment.**
+	- This may be changed in the future, but no promises.
+- **Only members of the `On` namespace become Extensible types.**
+	- This simplifies the code pretty dramatically for my generator tool as I can piggyback off of that namespace to filter my types out.
+- Extensibles cannot detect construction of original counterparts for automatic binding. 
+	- Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
+- Extensibles cannot extend finalizers (but it *can* extend a `Dispose` method, if present).
+	- Extensibles does not extend constructors either, but a unique `Bind` method is generated for each constructor, allowing you to *mimic* original constructors instead.
+	- Again, the base extensible constructor *has no logic*. This is why you must hook into the original constructor (in the `Initialize` method, as seen in the example) and explicitly call the `Bind` method, and is also why you should not be manually invoking constructors.
+- Extensibles does not override methods with generic type parameters.
+	- This could probably be done later on, but for now, BIE doesn't do it so I won't either.
+
+
 ## How does it work?
 
 This tool creates the `Extensible` namespace (comparable to BIE's `On` namespace), which contains its own version of all classes from the base game. 
@@ -45,25 +69,38 @@ In Rain World, this is what a hypothetical setup might look like:
 
 **Class:** `MyPlayer.cs`
 ```cs
-// In general, it is strongly recommended (but not actively enforced) that you make your extensible type sealed.
-// When the Binder searches for methods to automatically hook, it looks for *explicitly declared* members. 
-// This means that if you make an abstract extensible class, inherited virtual members **WILL NOT BE AUTOMATICALLY BOUND** 
-// unless you override them and call the base method from the override.
+// First note: You ***MUST*** seal your class. If it is unsealed, 
+// the binder's initializer will raise an InvalidOperationException.
+//
+// When the Binder searches for methods to automatically hook, 
+// it looks for *explicitly declared* members. 
+//
+// This means that if you make an abstract extensible class, inherited 
+// virtual members **WILL NOT BE AUTOMATICALLY BOUND** unless you override 
+// them and call the base method from the override.
 public sealed class MyPlayer : Extensible.Player {
 
 	private bool _gotPermissionToDie = false;
 
 	MyPlayer(Player original, AbstractCreature creature, World world) : base(original) {
 		// This constructor will be called by the binder (see below).
-		// Note that this constructor *MUST* be private. You can do this by having no access modifier (as done here) or explicitly putting private, up to you.
-		// If the constructor is not private, the binder will raise an exception reminding you to do so (this is to relay the fact that you should not be
+		
+		// Note that this constructor *MUST* be private!
+		// You can do this by having no access modifier (as done here) 
+		// or explicitly putting private, up to you.
+
+		// If the constructor is not private, the binder will raise an exception 
+		// reminding you to do so (this is to relay the fact that you should not be
 		// calling your ctors manually!)
 
-		// Also note that the base call only accepts original - the base constructor doesn't actually do any logic from the original class, it just ensures that the
+		// Also note that the base call only accepts original - the base constructor 
+		// doesn't actually do any logic from the original class, it just ensures that the
 		// Original property (which all mirrors use) is set *before* your constructor executes.
 
-		// You MUST declare a constructor like this to use its corresponding bind method! If this constructor was missing, and Bind(player, abstractCreature, world)
-		// got called, the Binder would raise an exception reporting that this constructor was missing, thus meaning the bind method is not available.
+		// You MUST declare a constructor like this to use its corresponding bind method! 
+		// If this constructor was missing, and Bind(player, abstractCreature, world)
+		// got called, the Binder would raise an exception reporting that this constructor 
+		// was missing, thus meaning the bind method is not available.
 	}
 
 	// Call this from the mod's Awake()/OnEnable()
@@ -84,7 +121,7 @@ public sealed class MyPlayer : Extensible.Player {
 			}
 		};
 		On.Player.Destroy += (originalMethod, @this) => {
-			Binder<MyPlayer>.TryReleaseCurrentBinding(@this); // This can be used to manually dispose of a binding.
+			Binder<MyPlayer>.TryReleaseBinding(@this); // This can be used to manually dispose of a binding.
 			// Most importantly, THIS IS *NOT* REQUIRED, but is recommended when possible.
 			// By default, the Binder will free objects alongside garbage collection of the original type (@this), which works but has no guarantees.
 		};
@@ -97,24 +134,3 @@ public sealed class MyPlayer : Extensible.Player {
 
 }
 ```
-
-# Why?
-At its core, Extensibles *is* just a comically thick boilerplate. The leverage it has over stock hooks varies wildly across games, but in general...
-* Extensibles makes working with discrete objects feel more natural, as access (via hooks) is no longer static.
-	* This might benefit newer modders especially.
-	* This can also help code cleanlines, especially in games like Rain World that have cluttered types.
-	* This might be more familiar to modders coming from other games, especially Minecraft due to its similarities with Mixin.
-* Extensibles allows automatically hooking properties with this technique (though doing this normally *is* just one line of code).
-
-Overall, the only reason you should choose to use this over any other solution comes down to preference. If the presence of one more dependency and some boilerplate is worth it for convenience, then enjoy, otherwise carry on with your work like normal and pay no mind to this toolkit.
-
-# Limitations
-- **Extensibles is NOT thread safe, and only operates predictably in a single-threaded environment.**
-	- This may be changed in the future, but no promises.
-- Extensibles cannot detect construction of original counterparts for automatic binding. 
-	- Whether or not this is a good idea is debatable as every automagic feature makes it harder to debug and diagnose issues caused by this module; it creates a purposeful break or boundary in the code flow.
-- Extensibles cannot extend finalizers (but it *can* extend a `Dispose` method, if present).
-	- Extensibles does not extend constructors either, but a unique `Bind` method is generated for each constructor, allowing you to *mimic* original constructors instead.
-	- Again, the base extensible constructor *has no logic*. This is why you must hook into the original constructor (in the `Initialize` method, as seen in the example) and explicitly call the `Bind` method, and is also why you should not be manually invoking constructors.
-- Extensibles does not override methods with generic type parameters.
-	- This could probably be done later on, but for now, BIE doesn't do it so I won't either.
