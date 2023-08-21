@@ -157,7 +157,7 @@ namespace HookGenExtender.Core.ILGeneration {
 						if (!body.Variables.Contains(i.Operand)) throw new InvalidOperationException($"You forgot to add local {(i.Operand as IVariable).Name} to the method body's variables.");
 					}
 				} else if (i.IsLdarg() || i.IsStarg()) {
-					if (i.Operand is not Parameter param) {
+					if (i.Operand is not Parameter param && (i.OpCode == OpCodes.Ldarg || i.OpCode == OpCodes.Ldarg_S || i.OpCode == OpCodes.Ldarga || i.OpCode == OpCodes.Ldarga_S || i.IsStarg())) {
 						throw new InvalidOperationException($"A ldarg or starg instruction is using an integer or other invalid type for its argument index. You need to use an instance of Parameter (see {nameof(ILTools.ParameterIndex)} of class {nameof(ILTools)}, or consider using {nameof(ILTools.EmitStarg)} to automate this).");
 					}
 				}
