@@ -88,6 +88,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="in"></param>
 		public static ExtensibleBinderCoreMembers MakeBinderCoreMembers(ExtensiblesGenerator main, ExtensibleTypeData @in) {
 			GenericVar tExtensible = CommonGenericArgs.TYPE_ARG_0; // Provide this under a proxy name.
+			GenericInstanceTypeDef weakRefExtensibleFldType = main.Shared.WeakReference.MakeGenericType(main, tExtensible);
 
 			GenericInstanceTypeDef bindingsFieldType = main.Shared.CWTReference.MakeGenericType(main, @in.ImportedGameTypeSig, tExtensible);
 			FieldDefAndRef bindingsField = bindingsFieldType.CreateFieldOfThisType("<Binder>bindings", CommonAttributes.SPECIAL_LOCKED_STATIC_FIELD, @in.GenericBinder.Reference);
@@ -107,7 +108,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			tryReleaseBindingMethod.SetParameterName(0, "fromInstance");
 			@in.Binder.AddMethod(tryReleaseBindingMethod);
 
-			MethodDefAndRef tryGetBindingMethod = new MethodDefAndRef(main, "TryGetBinding", MethodSig.CreateStatic(main.CorLibTypeSig<bool>(), @in.ImportedGameTypeSig, new ByRefSig(CommonGenericArgs.TYPE_ARG_0)), @in.GenericBinder.Reference, MethodAttributes.Public);
+			MethodDefAndRef tryGetBindingMethod = new MethodDefAndRef(main, "TryGetBinding", MethodSig.CreateStatic(main.CorLibTypeSig<bool>(), @in.ImportedGameTypeSig, new ByRefSig(weakRefExtensibleFldType.Signature)), @in.GenericBinder.Reference, MethodAttributes.Public);
 			tryGetBindingMethod.Definition.Parameters[1].GetOrCreateParamDef().IsOut = true;
 			tryGetBindingMethod.SetParameterName(0, "toInstance");
 			tryGetBindingMethod.SetParameterName(1, "binding");

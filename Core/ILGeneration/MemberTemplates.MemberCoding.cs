@@ -255,18 +255,35 @@ namespace HookGenExtender.Core.ILGeneration {
 			tryReleaseBindingBody.EmitCallvirt(bindingsFieldType.ReferenceExistingMethod("Remove", main.Shared.CWTRemoveSig));
 			tryReleaseBindingBody.EmitRet();
 
-			tryReleaseBindingBody.UpdateInstructionOffsets();
+			tryReleaseBindingBody.FinalizeMethodBody(main);
 			#endregion
 
 			#region TryGetBinding
 			CilBody tryGetBindingBody = tryGetBinding.GetOrCreateBody();
+			Local strongRef = new Local(CommonGenericArgs.TYPE_ARG_0, "result");
+			tryGetBindingBody.Variables.Add(strongRef);
+
 			tryGetBindingBody.Emit(OpCodes.Ldsfld, bindings.Reference);
 			tryGetBindingBody.EmitLdarg(0);
-			tryGetBindingBody.EmitLdarg(1, false); // Reminder: It's already a by-ref type. Don't ref the ref.
+			// tryGetBindingBody.EmitLdarg(1, false); // Reminder: It's already a by-ref type. Don't ref the ref.
+			tryGetBindingBody.EmitLdloc(strongRef, true);
 			tryGetBindingBody.EmitCallvirt(bindingsFieldType.ReferenceExistingMethod("TryGetValue", main.Shared.CWTTryGetValueSig));
+			
+			Instruction isOK = tryGetBindingBody.NewBrDest();
+			tryGetBindingBody.Emit(OpCodes.Brtrue, isOK);
+			tryGetBindingBody.EmitNull();
+			tryGetBindingBody.EmitStarg(1);
+			tryGetBindingBody.EmitValue(false);
 			tryGetBindingBody.EmitRet();
 
-			tryReleaseBindingBody.UpdateInstructionOffsets();
+			tryGetBindingBody.Emit(isOK);
+			tryGetBindingBody.EmitLdloc(strongRef);
+			tryGetBindingBody.EmitNew(main.Shared.WeakReferenceCtorGenericArg0Reference);
+			tryGetBindingBody.EmitStarg(1);
+			tryGetBindingBody.EmitValue(true);
+			tryGetBindingBody.EmitRet();
+
+			tryGetBindingBody.FinalizeMethodBody(main);
 			#endregion
 
 		}
