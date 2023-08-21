@@ -138,7 +138,7 @@ namespace HookGenExtender.Core.ILGeneration {
 				body.Emit(OpCodes.Castclass, currentType.ImportedGameType);
 			}
 			body.EmitRet(); // gg ez
-			body.FinalizeMethodBody(main);
+			cast.FinalizeMethodBody(main);
 			makeMemberWithin.ExtensibleType.AddMethod(cast);
 
 			if (main.TryGetParent(currentType, out ExtensibleTypeData parent)) {

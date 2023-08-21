@@ -39,7 +39,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			ctorBody.EmitNew(newWeakReference);                 // new WeakReference<T>(original)
 			ctorBody.Emit(OpCodes.Stfld, storage.Definition);   // this.<Extensible>original = ^
 			ctorBody.EmitRet();
-			ctorBody.FinalizeMethodBody(main);
+			constructor.FinalizeMethodBody(main);
 		}
 
 		/// <summary>
@@ -67,7 +67,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			getterBody.Emit(OpCodes.Pop);                       // Pop (true/false result)
 			getterBody.EmitLdloc(result, false);		// original
 			getterBody.EmitRet();                               // return ^
-			getterBody.FinalizeMethodBody(main);
+			original.Getter.FinalizeMethodBody(main);
 			#endregion
 		}
 
@@ -222,7 +222,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			cctor.EmitRet();
 			#endregion
 
-			cctor.FinalizeMethodBody(main);
+			type.Binder.StaticConstructor.FinalizeMethodBody(main);
 
 			#endregion
 
@@ -255,7 +255,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			tryReleaseBindingBody.EmitCallvirt(bindingsFieldType.ReferenceExistingMethod("Remove", main.Shared.CWTRemoveSig));
 			tryReleaseBindingBody.EmitRet();
 
-			tryReleaseBindingBody.FinalizeMethodBody(main);
+			tryReleaseBinding.FinalizeMethodBody(main);
 			#endregion
 
 			#region TryGetBinding
@@ -271,19 +271,21 @@ namespace HookGenExtender.Core.ILGeneration {
 			
 			Instruction isOK = tryGetBindingBody.NewBrDest();
 			tryGetBindingBody.Emit(OpCodes.Brtrue, isOK);
-			tryGetBindingBody.EmitNull();
-			tryGetBindingBody.EmitStarg(1);
+			tryGetBindingBody.EmitLdarg(1);				// Load the result arg, which is by-ref
+			tryGetBindingBody.EmitNull();					// Load the value (null)
+			tryGetBindingBody.Emit(OpCodes.Stind_Ref);		// Store value as ref into arg.
 			tryGetBindingBody.EmitValue(false);
 			tryGetBindingBody.EmitRet();
 
 			tryGetBindingBody.Emit(isOK);
+			tryGetBindingBody.EmitLdarg(1);
 			tryGetBindingBody.EmitLdloc(strongRef);
 			tryGetBindingBody.EmitNew(main.Shared.WeakReferenceCtorGenericArg0Reference);
-			tryGetBindingBody.EmitStarg(1);
+			tryGetBindingBody.Emit(OpCodes.Stind_Ref);
 			tryGetBindingBody.EmitValue(true);
 			tryGetBindingBody.EmitRet();
 
-			tryGetBindingBody.FinalizeMethodBody(main);
+			tryGetBinding.FinalizeMethodBody(main);
 			#endregion
 
 		}

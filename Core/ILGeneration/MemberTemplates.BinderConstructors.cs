@@ -196,7 +196,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			#endregion
 
-			bindBody.FinalizeMethodBody(main);
+			bind.FinalizeMethodBody(main);
 		}
 
 	}

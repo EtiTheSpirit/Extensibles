@@ -62,7 +62,7 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			List<Instruction> garbage = new List<Instruction>();
 			//Dictionary<Instruction, List<Instruction>> jumpDestsToOriginal = new Dictionary<Instruction, List<Instruction>>();
-			foreach (Instruction jump in jumps) { 
+			foreach (Instruction jump in jumps) {
 				// Below: Use a while loop instead of an if statement.
 				// This addresses an edge case where a jump destination immediately follows another.
 				// Without the while loop, it would leave some branches without a destination as the instruction gets deleted.
@@ -124,7 +124,8 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// than what DNLib provides by default.
 		/// </summary>
 		/// <param name="body"></param>
-		public static void FinalizeMethodBody(this CilBody body, ExtensiblesGenerator main) {
+		public static void FinalizeMethodBody(this MethodDef method, ExtensiblesGenerator main) {
+			CilBody body = method.Body;
 			body.BakeDefRefsDown();
 			body.OptimizeBranches();
 			body.OptimizeMacros();
@@ -160,6 +161,13 @@ namespace HookGenExtender.Core.ILGeneration {
 					if (i.Operand is not Parameter param && (i.OpCode == OpCodes.Ldarg || i.OpCode == OpCodes.Ldarg_S || i.OpCode == OpCodes.Ldarga || i.OpCode == OpCodes.Ldarga_S || i.IsStarg())) {
 						throw new InvalidOperationException($"A ldarg or starg instruction is using an integer or other invalid type for its argument index. You need to use an instance of Parameter (see {nameof(ILTools.ParameterIndex)} of class {nameof(ILTools)}, or consider using {nameof(ILTools.EmitStarg)} to automate this).");
 					}
+					if (i.IsStarg()) {
+						int argIndex = (i.Operand as Parameter).Index;
+						if (method.HasThis) argIndex--;
+						if (method.Parameters[argIndex].Type is ByRefSig) {
+							throw new InvalidOperationException("You are trying to use starg to write to an out parameter. This is not valid. *Load* the argument, load the value, then use stind.ref to write to an out parameter.");
+						}
+					}
 				}
 			}
 
@@ -167,6 +175,21 @@ namespace HookGenExtender.Core.ILGeneration {
 			calc.Reset(body.Instructions, body.ExceptionHandlers);
 			calc.Calculate(out uint _);
 		}
+
+		/// <summary>
+		/// In the provided order, this calls:
+		/// <list type="number">
+		/// <item><see cref="BakeDefRefsDown(CilBody)"/></item>
+		/// <item><see cref="OptimizeNopJumps(CilBody, bool)"/></item>
+		/// <item><see cref="CilBody.OptimizeBranches()"/></item>
+		/// <item><see cref="CilBody.OptimizeMacros()"/></item>
+		/// <item><see cref="CilBody.UpdateInstructionOffsets()"/></item>
+		/// </list>
+		/// Then this will verify the stack of the method, raising an exception for any mistakes in a manner that should make debugging much, <em>much</em> easier
+		/// than what DNLib provides by default.
+		/// </summary>
+		/// <param name="body"></param>
+		public static void FinalizeMethodBody(this MethodDefAndRef method, ExtensiblesGenerator main) => FinalizeMethodBody(method.Definition, main);
 
 	}
 }

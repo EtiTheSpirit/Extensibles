@@ -134,7 +134,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			body.EmitCall(hook.origDelegateType.Invoke);
 
 			body.Emit(ret);
-			body.FinalizeMethodBody(main);
+			boundMethod.FinalizeMethodBody(main);
 		}
 
 		#endregion
@@ -292,7 +292,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			createBindings.EmitUnityDbgLog(main, $"[Extensible] Finished hooking members of type {{{type.ImportedGameType.FullName}}}.");
 
 			createBindings.EmitRet();
-			createBindings.FinalizeMethodBody(main);
+			binderMembers.createBindingsMethod.FinalizeMethodBody(main);
 			
 		}
 

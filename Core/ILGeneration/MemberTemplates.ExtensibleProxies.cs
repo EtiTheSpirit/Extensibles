@@ -157,7 +157,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			getter.EmitCall(coreMembers.originalObjectProxy.Getter.Reference);
 			getter.Emit(isReadOnly ? OpCodes.Ldfld : OpCodes.Ldflda, original.Reference);
 			getter.EmitRet();
-			getter.FinalizeMethodBody(main);
+			prop.Getter.FinalizeMethodBody(main);
 
 			coreMembers.type.ExtensibleType.AddProperty(prop);
 
@@ -250,7 +250,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			proxyBody.EmitAmountOfArgs(numGameParams, 1, false);							// All args of method (arg 1, ...)
 			proxyBody.EmitCall(origDelegateType.Invoke);									// Call orig(self, ...)
 			proxyBody.EmitRet();
-			proxyBody.FinalizeMethodBody(main);
+			proxyMethod.FinalizeMethodBody(main);
 
 			coreMembers.type.ExtensibleType.AddMethod(proxyMethod);
 			coreMembers.type.ExtensibleType.AddField(isCallerInInvocation);
