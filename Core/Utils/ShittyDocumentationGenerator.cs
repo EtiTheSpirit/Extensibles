@@ -37,7 +37,7 @@ namespace HookGenExtender.Core.Utils {
 				// Replacement type:
 				xml.AppendFormat("<member name=\"T:{0}\">", info.ExtensibleType.Reference.FullName.Replace("/", "."));
 				xml.AppendLine("<summary>");
-				xml.AppendFormat("Extend this type to create an object that behaves as if it were an instance of <see cref=\"{0}\"/>.\n", info._originalGameType.FullName);
+				xml.AppendFormat("Extend this type to create an object that behaves as if it were an instance of <see cref=\"{0}\"/>.\n", info.ImportedGameType.FullName);
 				xml.Append("Your type will inherit all methods, properties, and fields of the original type.<para/>\n\n");
 				xml.AppendFormat("<strong>IMPORTANT:</strong> You <em>must</em> hook the original type (<see cref=\"{0}\"/>)'s <c>.ctor</c> and use this Extensible type's <see cref=\"{1}\">Binder</see>. For more information, check the Binder class stored within this class.<para/>\n\n", info.ImportedGameType.FullName, info.Binder.Reference.FullName);
 				xml.AppendLine("Fields can <em>not</em> be overridden, as they are proxies. However, certain special rules apply to properties and methods, which <em>can</em> be overridden.");

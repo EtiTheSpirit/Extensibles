@@ -148,8 +148,7 @@ namespace HookGenExtender.Core {
 			_generated = true;
 
 			Stopwatch sw = new Stopwatch();
-			Console.WriteLine("Pre-generating all types and generating cache... This will take a moment.");
-			Console.CursorTop--;
+			Console.WriteLine("Step 1: Generate types and build cache // This will take a moment. Please wait...");
 			TypeDef[] allTypes = Original.GetTypes().ToArray();
 			int current = 0;
 			int real = 0;
@@ -195,20 +194,15 @@ namespace HookGenExtender.Core {
 
 				real++;
 
-				if (current == 0) {
-					Console.Write(new string(' ', Console.BufferWidth));
-					Console.CursorTop--;
-				}
 				if (current % 100 == 0) {
-					Console.WriteLine($"Pre-generating all types ({current} of {allTypes.Length}, skipped {current - real}...)");
+					Console.WriteLine($"Generating types... ({current} of {allTypes.Length}, skipped {current - real}...)");
 					Console.CursorTop--;
 				}
 			}
 			sw.Stop();
 			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
 			elapsed = time;
-			Console.WriteLine(new string(' ', Console.BufferWidth));
-			Console.WriteLine($"Pre-generating all types ({current} of {allTypes.Length}, skipped {current - real}...) took {time} seconds.");
+			Console.WriteLine($"Generating types... ({current} of {allTypes.Length}, skipped {current - real}...) took {time} seconds.");
 
 			Console.WriteLine("Binding type inheritence...");
 			Console.CursorTop--;
@@ -244,8 +238,9 @@ namespace HookGenExtender.Core {
 			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
 			elapsed += time;
 			Console.WriteLine($"Binding type inheritence ({current} of {real}...) took {time} seconds.");
+			Console.WriteLine("Step 2: Bind types and generate code.");
 
-			Console.WriteLine("Generating type contents...");
+			Console.WriteLine("Generating type contents (Pass 1)...");
 			Console.CursorTop--;
 			current = 0;
 
@@ -255,7 +250,7 @@ namespace HookGenExtender.Core {
 				MakeExtensibleTypeProcedure(binding.Value, lookup);
 				current++;
 				if (current % 100 == 0) {
-					Console.WriteLine($"Generating type contents ({current} of {real}...)");
+					Console.WriteLine($"Generating type contents (Pass 1) ({current} of {real}...)             ");
 					Console.CursorTop--;
 				}
 			}
@@ -264,14 +259,15 @@ namespace HookGenExtender.Core {
 				FinalizeMakeExtensibleTypeProcedure(lookup[binding.Value], binding.Value);
 				current++;
 				if (current % 100 == 0) {
-					Console.WriteLine($"Generating type contents (Pass 2) ({current} of {real}...)");
+					Console.WriteLine($"Generating type contents (Pass 2) ({current} of {real}...)             ");
 					Console.CursorTop--;
 				}
 			}
 			sw.Stop();
 			time = (int)Math.Round(sw.Elapsed.TotalSeconds);
 			elapsed += time;
-			Console.WriteLine($"Generating type contents ({current} of {real}...) took {time} seconds.               ");
+			Console.WriteLine();
+			Console.WriteLine($"Generating type contents ({current} of {real}...) took {time} seconds total.       ");
 
 			// TO FUTURE XAN/MAINTAINERS:
 			// For *some reason*, this value here (added by the custom attribute) is used when
@@ -295,7 +291,7 @@ namespace HookGenExtender.Core {
 		}
 
 		public void Save(FileInfo to, FileInfo documentation = null) {
-			Console.WriteLine("Saving to disk...");
+			Console.WriteLine("Saving to disk. // This will take a moment. Please wait...");
 			if (to.Exists) to.Delete();
 			using FileStream stream = to.Open(FileMode.CreateNew);
 
