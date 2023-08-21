@@ -106,7 +106,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			cctor.EmitStloc(extensibleType); // Used in the "Ensure all constructors are private" block
 
 			cctor.EmitStringConcat(main, true, new Action<CilBody, ExtensiblesGenerator>[] {
-				(body, main) => body.Emit(OpCodes.Ldstr, "[Extensibles] Initializing Binder<"),
+				(body, main) => body.Emit(OpCodes.Ldstr, $"[Extensibles] Initializing Binder<"),
 				(body, main) => {
 					body.EmitLdloc(extensibleType);
 					body.EmitCallvirt(main.Shared.Type_get_FullName);
@@ -190,13 +190,16 @@ namespace HookGenExtender.Core.ILGeneration {
 				cctor.EmitLdloc(ctorForLoopIndex);
 				cctor.Emit(OpCodes.Ldelem, main.Shared.ConstructorInfoReference);
 				cctor.EmitCallvirt(main.Shared.MethodBase_get_Attributes);
-				cctor.Emit(OpCodes.Conv_I4);
+				// cctor.Emit(OpCodes.Conv_I4);
+				/*
 				cctor.EmitLdc_I4((int)System.Reflection.MethodAttributes.Private);
 				cctor.Emit(OpCodes.And);
 				cctor.EmitLdc_I4((int)System.Reflection.MethodAttributes.Private);
+				*/
 				Instruction endOfLoop = cctor.NewBrDest();
-				cctor.Emit(OpCodes.Beq_S, endOfLoop); // TO FUTURE XAN: Do not jump to @continue here, it bricks the loop.
-													  // Reason: You have to reach the code emitted by EmitForLoopTail
+				cctor.EmitHasFlag((int)System.Reflection.MethodAttributes.Private);
+				cctor.Emit(OpCodes.Brtrue, endOfLoop);	// TO FUTURE XAN: Do not jump to @continue here, it bricks the loop.
+														// Reason: You have to reach the code emitted by EmitForLoopTail
 				cctor.EmitStringConcat(main, true, new Action<CilBody, ExtensiblesGenerator>[] {
 					(body, main) => body.Emit(OpCodes.Ldstr, "[Extensibles] Constructor {"),
 					(body, main) => {
@@ -228,7 +231,9 @@ namespace HookGenExtender.Core.ILGeneration {
 			Local userType = new Local(main.Shared.TypeSig, "userType");
 			Local propertyRef = new Local(main.Shared.PropertyInfoSig, "propertyRef");
 			Local userTypeName = new Local(main.CorLibTypeSig<string>(), "userTypeName");
-			createBindingsBody.SetLocals(userType, propertyRef, userTypeName);
+			Local methodRef = new Local(main.Shared.MethodInfoSig, "methodRef");
+			Local methodAttributes = new Local(main.Shared.SysMethodAttributesSig, "mtdAttributes");
+			createBindingsBody.SetLocals(userType, propertyRef, userTypeName, methodRef, methodAttributes);
 
 			createBindingsBody.EmitTypeof(main, CommonGenericArgs.TYPE_ARG_0_REF);
 			createBindingsBody.EmitStoreThenLoad(userType);
@@ -238,7 +243,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			createBindingsBody.EmitStringConcat(main, true, new Action<CilBody, ExtensiblesGenerator>[] {
 				(body, main) => body.Emit(OpCodes.Ldstr, "[Extensibles] Searching for overridden methods and properties in Extensible user-type {"),
 				(body, main) => body.EmitLdloc(userTypeName),
-				(body, main) => body.Emit(OpCodes.Ldstr, $"}} that belong to vanilla class {{{type.ImportedGameType.FullName}}}. This step might cause a bit of a hitch...")
+				(body, main) => body.Emit(OpCodes.Ldstr, $"}} that belong to vanilla class {{{type.ImportedGameType.FullName}}}...")
 			}); ;
 			createBindingsBody.EmitUnityDbgLog(main, null);
 			#endregion
