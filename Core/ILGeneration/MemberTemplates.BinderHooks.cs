@@ -168,8 +168,9 @@ namespace HookGenExtender.Core.ILGeneration {
 		public static void AddMemberBindToCreateHooksMethod(ExtensiblesGenerator main, MethodDefAndRef binderHookMethod, in ExtensibleCoreMembers coreMembers, in ExtensibleBinderCoreMembers binderMembers, in ExtensibleMethodProxyMembers proxyMembers, in BepInExHookRef hookInfo, string propertyNameIfApplicable, bool isSecondMemberOfProperty) {
 			const BindingFlags userExtTypeMemberFlags = BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 			CilBody createBindings = binderMembers.createBindingsMethod.GetOrCreateBody();
+			Local methodReference = createBindings.Variables[3];
+			Local methodAttributesInt = createBindings.Variables[4];
 			// REMEMBER: Loc0 is reserved (typeof(TExtensible))
-			// Use AppendLocals for anything new.
 
 			#region Alias Methods
 			void Alias_EmitIfSetDoesNotContain(string methodName, Instruction gotoNext) {
@@ -190,9 +191,23 @@ namespace HookGenExtender.Core.ILGeneration {
 
 				createBindings.Emit(OpCodes.Ldloc_0);                                                               // typeof(TExtensible)
 				createBindings.EmitGetMethod(main, methodName, userExtTypeMemberFlags, hookMethodSignatureRefs);    // GetMethod(...) (MethodInfo is now on stack)
+				createBindings.EmitStoreThenLoad(methodReference);
 				createBindings.EmitNull();
 				createBindings.EmitCall(main.Shared.MethodInfosNotEqual);
 				createBindings.Emit(OpCodes.Brfalse, gotoNext);
+				// ^ Method is null. Go to next.
+
+				createBindings.EmitLdloc(methodReference);
+				createBindings.EmitCallvirt(main.Shared.MethodBase_get_Attributes);
+				createBindings.Emit(OpCodes.Conv_I4);
+				createBindings.EmitStoreThenLoad(methodAttributesInt);
+				createBindings.EmitHasFlag((int)System.Reflection.MethodAttributes.Virtual, gotoNext, not: true);
+				// Method not virtual. Skip it.
+
+				createBindings.EmitLdloc(methodAttributesInt);
+				createBindings.EmitHasFlag((int)System.Reflection.MethodAttributes.NewSlot, gotoNext);
+				// Method occupies new vtable slot. Skip it.
+
 			}
 			#endregion
 
@@ -217,7 +232,7 @@ namespace HookGenExtender.Core.ILGeneration {
 				}
 				createBindings.EmitUnityDbgLog(main, $"[Extensible] Hooking {binderHookMethod.Reference.Name.Substring(0, 3)}ter...");
 				createBindings.EmitMethodof(main, hookInfo.originalGameMethod.Reference);					// from
-				createBindings.EmitMethodof(main, binderHookMethod.Reference);								// to
+				createBindings.EmitMethodofWithType(main, binderHookMethod.Definition, binderMembers.type.GenericBinder.Reference); // to
 				createBindings.EmitNew(main.Shared.HookCtor);                                               // new Hook(from, to)
 				createBindings.Emit(OpCodes.Pop);                                                           // Remove the new hook from the stack.
 

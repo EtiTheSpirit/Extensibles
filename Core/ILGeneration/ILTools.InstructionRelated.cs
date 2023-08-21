@@ -343,42 +343,6 @@ namespace HookGenExtender.Core.ILGeneration {
 		}
 
 		/// <summary>
-		/// Emits code that calls the getter of the provided property. It will automatically emit the proper opcode(s) based on whether or not the property is static and virtual.
-		/// </summary>
-		/// <param name="body"></param>
-		/// <param name="property"></param>
-		/// <param name="explicitCall">If true, this MUST be an explicit call (<see cref="OpCodes.Call"/>). This should be true when the goal is to use <see langword="base"/>.Property</param>
-		/// <param name="useDefinition">If null, the system will try to guess whether or not using the property definition is possible. Otherwise, setting this to false will always use the reference, and true will always use the definition.</param>
-		/// <returns>The first instruction of the generated code.</returns>
-		[Obsolete("Do not use this, due to ambiguous behavior. Manually emit the property with the definition or reference based on what is appropriate.", true)]
-		public static Instruction EmitGetPropAuto(this CilBody body, PropertyDefAndRef property, bool explicitCall = false, bool? useDefinition = null) {
-			OpCode call;
-			Instruction first = null;
-			if (property.Getter == null) throw new InvalidOperationException($"The provided property ({property.Definition.FullName}) does not have a getter.");
-			if (property.Definition.IsStatic() || explicitCall) {
-				call = OpCodes.Call;
-			} else {
-				call = OpCodes.Callvirt;
-				first = body.EmitThis();
-			}
-			object defOrRef;
-			if (useDefinition == null) {
-				if (property.Getter.Definition.DeclaringType?.DefinitionAssembly == property.Getter.Generator.Extensibles.Assembly) {
-					defOrRef = property.Getter.Definition;
-				} else {
-					defOrRef = property.Getter.Reference;
-				}
-			} else if (useDefinition.Value) {
-				defOrRef = property.Getter.Definition;
-			} else {
-				defOrRef = property.Getter.Reference;
-			}
-
-			Instruction second = body.Emit(call, defOrRef);
-			return first ?? second;
-		}
-
-		/// <summary>
 		/// Emits <see cref="OpCodes.Call"/>
 		/// </summary>
 		/// <param name="body"></param>
@@ -393,24 +357,6 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="method"></param>
 		/// <returns></returns>
 		public static Instruction EmitCallvirt(this CilBody body, IMemberRef method) => body.Emit(OpCodes.Callvirt, method);
-
-		/// <summary>
-		/// Emits <see cref="OpCodes.Call"/>
-		/// </summary>
-		/// <param name="body"></param>
-		/// <param name="method"></param>
-		/// <returns></returns>
-		[Obsolete("Explicitly reference the Reference or Definition property of this object.", true)]
-		public static Instruction EmitCall(this CilBody body, IMemberDefAndRef method) => body.Emit(OpCodes.Call, method);
-
-		/// <summary>
-		/// Emits <see cref="OpCodes.Callvirt"/>
-		/// </summary>
-		/// <param name="body"></param>
-		/// <param name="method"></param>
-		/// <returns></returns>
-		[Obsolete("Explicitly reference the Reference or Definition property of this object.", true)]
-		public static Instruction EmitCallvirt(this CilBody body, IMemberDefAndRef method) => body.Emit(OpCodes.Callvirt, method);
 
 		/// <summary>
 		/// Emits all the instructions necessary for a call to <see cref="Type.GetMethod(string, BindingFlags, Binder, Type[], ParameterModifier[])"/>.
@@ -620,24 +566,38 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <param name="flag"></param>
 		/// <param name="jumpTo">If declared, this will jump instead of push 1 or 0 onto the stack</param>
 		/// <param name="matchAll">If false, the current int on the stack &amp; <paramref name="flag"/> must be nonzero. If true, it must be equal to <paramref name="flag"/> (have all flags set).</param>
+		/// <param name="not">If true, the resulting condition will be inverted (does <em>not</em> have flag). This is only valid if jumpTo is declared</param>
 		/// <returns></returns>
-		public static Instruction EmitHasFlag(this CilBody body, int flag, Instruction jumpTo = null, bool matchAll = false) {
+		public static Instruction EmitHasFlag(this CilBody body, int flag, Instruction jumpTo = null, bool matchAll = false, bool not = false) {
 			// Imagine: <current stack int value>
+			if (not && jumpTo == null) {
+				throw new ArgumentException($"Inversion is only allowed if the {nameof(jumpTo)} instruction is defined (not null).", nameof(not));
+			}
 			Instruction first = body.EmitLdc_I4(flag);
 			body.Emit(OpCodes.And);
 			if (matchAll) {
+				// Value must equal flag.
 				body.EmitLdc_I4(flag);
-				if (jumpTo == null) {
-					body.Emit(OpCodes.Ceq);         // value == flag
+				if (not) {
+					body.Emit(OpCodes.Bne_Un, jumpTo);		// Invert; value != flag
 				} else {
-					body.Emit(OpCodes.Beq, jumpTo);
+					if (jumpTo == null) {
+						body.Emit(OpCodes.Ceq);				// value == flag
+					} else {
+						body.Emit(OpCodes.Beq, jumpTo);
+					}
 				}
 			} else {
+				// Value must be nonzero
 				body.EmitLdc_I4(0);
-				if (jumpTo == null) {
-					body.Emit(OpCodes.Clt);         // 0 < value
+				if (not) {
+					body.Emit(OpCodes.Beq, jumpTo);			// Invert; value == 0
 				} else {
-					body.Emit(OpCodes.Blt, jumpTo);
+					if (jumpTo == null) {
+						body.Emit(OpCodes.Cgt);				// value > 0 (which is true for nonzero, obviously)
+					} else {
+						body.Emit(OpCodes.Bne_Un, jumpTo);	// value != 0
+					}
 				}
 			}
 			return first;
