@@ -243,6 +243,11 @@ namespace HookGenExtender.Core.DataStorage {
 		public MemberRef GetMethodFromHandle { get; }
 
 		/// <summary>
+		/// A reference to <see cref="MethodBase.GetMethodFromHandle(RuntimeMethodHandle, RuntimeTypeHandle)"/>
+		/// </summary>
+		public MemberRef GetMethodFromHandleAndType { get; }
+
+		/// <summary>
 		/// A reference to <see cref="ConstructorInfo"/>.
 		/// </summary>
 		public ITypeDefOrRef ConstructorInfoReference { get; }
@@ -351,6 +356,16 @@ namespace HookGenExtender.Core.DataStorage {
 		/// A reference to the inequality operator of <see cref="ConstructorInfo"/>
 		/// </summary>
 		public MemberRef ConstructorInfosNotEqual { get; }
+
+		/// <summary>
+		/// The signature of to <see cref="System.Reflection.MethodAttributes"/>.
+		/// </summary>
+		public TypeSig SysMethodAttributesSig { get; }
+
+		/// <summary>
+		/// A reference to <see cref="System.Reflection.MethodAttributes"/>.
+		/// </summary>
+		public ITypeDefOrRef SysMethodAttributesReference { get; }
 
 		#endregion
 
@@ -519,8 +534,10 @@ namespace HookGenExtender.Core.DataStorage {
 			PropertyInfoReference = propertyInfoReference;
 			PropertyInfoSig = propertyInfoSig;
 
-			GetTypeFromHandle = new MemberRefUser(main.Extensibles, "GetTypeFromHandle", MethodSig.CreateStatic(TypeSig, main.Cache.ImportAsTypeSig(typeof(RuntimeTypeHandle))), TypeReference);
+			TypeSig runtimeTypeHandle = main.Cache.ImportAsTypeSig(typeof(RuntimeTypeHandle));
+			GetTypeFromHandle = new MemberRefUser(main.Extensibles, "GetTypeFromHandle", MethodSig.CreateStatic(TypeSig, runtimeTypeHandle), TypeReference);
 			GetMethodFromHandle = new MemberRefUser(main.Extensibles, "GetMethodFromHandle", MethodSig.CreateStatic(MethodBaseSig, main.Cache.ImportAsTypeSig(typeof(RuntimeMethodHandle))), MethodBaseReference);
+			GetMethodFromHandleAndType = new MemberRefUser(main.Extensibles, "GetMethodFromHandle", MethodSig.CreateStatic(MethodBaseSig, main.Cache.ImportAsTypeSig(typeof(RuntimeMethodHandle)), runtimeTypeHandle), MethodBaseReference);
 
 			main.Cache.ImportForReferenceAndSignature(typeof(ConstructorInfo), out ITypeDefOrRef ctorInfoRef, out TypeSig ctorInfoSig);
 			ConstructorInfoReference = ctorInfoRef;
@@ -529,7 +546,10 @@ namespace HookGenExtender.Core.DataStorage {
 			GetConstructors = new MemberRefUser(main.Extensibles, "GetConstructors", MethodSig.CreateInstance(main.Cache.ImportAsTypeSig(typeof(ConstructorInfo[])), BindingFlagsSig), TypeReference);
 			ConstructorInfoInvoke = new MemberRefUser(main.Extensibles, "Invoke", MethodSig.CreateInstance(main.CorLibTypeSig<object>(), ObjectArray), ConstructorInfoReference);
 
-			MethodBase_get_Attributes = new MemberRefUser(main.Extensibles, "get_Attributes", MethodSig.CreateInstance(main.Cache.ImportAsTypeSig(typeof(System.Reflection.MethodAttributes))), MethodBaseReference);
+			main.Cache.ImportForReferenceAndSignature(typeof(System.Reflection.MethodAttributes), out ITypeDefOrRef mtdAttrsRef, out TypeSig mtdAttrsSig);
+			SysMethodAttributesReference = mtdAttrsRef;
+			SysMethodAttributesSig = mtdAttrsSig;
+			MethodBase_get_Attributes = new MemberRefUser(main.Extensibles, "get_Attributes", MethodSig.CreateInstance(SysMethodAttributesSig), MethodBaseReference);
 			Type_get_FullName = new MemberRefUser(main.Extensibles, "get_FullName", MethodSig.CreateInstance(main.CorLibTypeSig<string>()), TypeReference);
 			Type_get_IsAbstract = new MemberRefUser(main.Extensibles, "get_IsAbstract", MethodSig.CreateInstance(main.CorLibTypeSig<bool>()), TypeReference);
 			Type_get_IsSealed = new MemberRefUser(main.Extensibles, "get_IsSealed", MethodSig.CreateInstance(main.CorLibTypeSig<bool>()), TypeReference);
@@ -591,7 +611,6 @@ namespace HookGenExtender.Core.DataStorage {
 
 			ToStringReference = new MemberRefUser(main.Extensibles, "ToString", MethodSig.CreateInstance(main.CorLibTypeSig<string>()), main.CorLibTypeRef<object>());
 			GetTypeReference = new MemberRefUser(main.Extensibles, "GetType", MethodSig.CreateInstance(TypeSig), main.CorLibTypeRef<object>());
-
 
 			MethodSig unityDebugMethodCommon = MethodSig.CreateStatic(main.CorLibTypeSig<Void>(), main.CorLibTypeSig<object>());
 			ITypeDefOrRef unityDebug = main.Cache.Import(typeof(UnityEngine.Debug));
