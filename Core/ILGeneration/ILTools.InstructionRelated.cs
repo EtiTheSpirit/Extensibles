@@ -309,40 +309,6 @@ namespace HookGenExtender.Core.ILGeneration {
 		}
 
 		/// <summary>
-		/// Emits code that loads the provided field from the current type. It will automatically emit the proper opcode(s) based on whether or not the field is static.
-		/// </summary>
-		/// <param name="body"></param>
-		/// <param name="byReference"></param>
-		/// <param name="useDefinition">If null, the system will try to guess whether or not using the property definition is possible. Otherwise, setting this to false will always use the reference, and true will always use the definition.</param>
-		/// <returns></returns>
-		/// <returns>The first instruction of the generated code.</returns>
-		[Obsolete("Do not use this, due to ambiguous behavior. Manually emit the field load with the definition or reference based on what is appropriate.", true)]
-		public static Instruction EmitLdThisFldAuto(this CilBody body, FieldDefAndRef field, bool byReference = false, bool? useDefinition = null) {
-			OpCode load;
-			Instruction first = null;
-			if (field.Definition.IsStatic) {
-				load = byReference ? OpCodes.Ldsflda : OpCodes.Ldsfld;
-			} else {
-				load = byReference ? OpCodes.Ldflda : OpCodes.Ldfld;
-				first = body.Emit(OpCodes.Ldarg_0);
-			}
-			object defOrRef;
-			if (useDefinition == null) {
-				if (field.Definition.FieldType.DefinitionAssembly == field.Generator.Extensibles.Assembly) {
-					defOrRef = field.Definition;
-				} else {
-					defOrRef = field.Reference;
-				}
-			} else if (useDefinition.Value) {
-				defOrRef = field.Definition;
-			} else {
-				defOrRef = field.Reference;
-			}
-			Instruction second = body.Emit(load, defOrRef);
-			return first ?? second;
-		}
-
-		/// <summary>
 		/// Emits <see cref="OpCodes.Call"/>
 		/// </summary>
 		/// <param name="body"></param>
@@ -621,6 +587,16 @@ namespace HookGenExtender.Core.ILGeneration {
 			body.Instructions.Add(result);
 			return result;
 		}
+		/// <summary>
+		/// Emits and returns the version of Starg best suited for the input argument index. This also allows inputting the argument index as an int32.
+		/// </summary>
+		/// <param name="argN"></param>
+		/// <returns></returns>
+		public static Instruction EmitStarg(this CilBody body, int argN) {
+			Instruction result = GetStarg(argN);
+			body.Instructions.Add(result);
+			return result;
+		}
 
 		/// <summary>
 		/// Emits and returns the version of Ldc_I4 best suited for the input integer value.
@@ -700,6 +676,15 @@ namespace HookGenExtender.Core.ILGeneration {
 				_ => new Instruction(OpCodes.Ldarg, ParameterIndex(argN))
 			};
 			return result;
+		}
+		/// <summary>
+		/// Returns the version of Starg best suited for the input argument index. This also allows inputting the argument index as an int32.
+		/// </summary>
+		/// <param name="argN"></param>
+		/// <returns></returns>
+		public static Instruction GetStarg(int argN) {
+			if (argN <= byte.MaxValue) return new Instruction(OpCodes.Starg_S, ParameterIndex(argN));
+			return new Instruction(OpCodes.Starg, ParameterIndex(argN));
 		}
 
 		/// <summary>

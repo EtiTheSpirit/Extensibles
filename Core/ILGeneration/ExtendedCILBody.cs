@@ -144,6 +144,22 @@ namespace HookGenExtender.Core.ILGeneration {
 							}
 						}
 					}
+				} else if (i.IsLdloc() || i.IsStloc()) {
+					if (i.OpCode == OpCodes.Ldloc_0 || i.OpCode == OpCodes.Stloc_0) {
+						if (body.Variables.Count <= 0) throw new InvalidOperationException("You forgot to add local #0 to the method body's variables.");
+					} else if (i.OpCode == OpCodes.Ldloc_1 || i.OpCode == OpCodes.Stloc_1) {
+						if (body.Variables.Count <= 1) throw new InvalidOperationException("You forgot to add local #1 to the method body's variables.");
+					} else if (i.OpCode == OpCodes.Ldloc_2 || i.OpCode == OpCodes.Stloc_2) {
+						if (body.Variables.Count <= 2) throw new InvalidOperationException("You forgot to add local #2 to the method body's variables.");
+					} else if (i.OpCode == OpCodes.Ldloc_3 || i.OpCode == OpCodes.Stloc_3) {
+						if (body.Variables.Count <= 3) throw new InvalidOperationException("You forgot to add local #3 to the method body's variables.");
+					} else if (i.OpCode == OpCodes.Ldloc_S || i.OpCode == OpCodes.Ldloc || i.OpCode == OpCodes.Ldloca || i.OpCode == OpCodes.Ldloca_S || i.OpCode == OpCodes.Stloc_S || i.OpCode == OpCodes.Stloc) {
+						if (!body.Variables.Contains(i.Operand)) throw new InvalidOperationException($"You forgot to add local {(i.Operand as IVariable).Name} to the method body's variables.");
+					}
+				} else if (i.IsLdarg() || i.IsStarg()) {
+					if (i.Operand is not Parameter param) {
+						throw new InvalidOperationException($"A ldarg or starg instruction is using an integer or other invalid type for its argument index. You need to use an instance of Parameter (see {nameof(ILTools.ParameterIndex)} of class {nameof(ILTools)}, or consider using {nameof(ILTools.EmitStarg)} to automate this).");
+					}
 				}
 			}
 
