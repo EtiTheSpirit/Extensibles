@@ -14,7 +14,7 @@ using UnityEngine;
 namespace HookGenExtender.Core.ILGeneration {
 
 	/// <summary>
-	/// Methods to improve the behavior of CIL bodies.
+	/// Methods to assist in writing CIL method bodies, works in tandem with <see cref="ILTools"/>.
 	/// </summary>
 	public static class ExtendedCILBody {
 
@@ -24,7 +24,7 @@ namespace HookGenExtender.Core.ILGeneration {
 		public static void BakeDefRefsDown(this CilBody body) {
 			foreach (Instruction i in body.Instructions) {
 				if (i.Operand is IMemberDefAndRef dr) {
-					throw new InvalidOperationException($"Instruction {i} uses a MemberDefAndRef. Directly access its Definition or Reference property.");
+					throw new InvalidOperationException($"Ambiguous operation: Instruction {i} uses a MemberDefAndRef. Directly access its Definition or Reference property.");
 				} else if (i.Operand is IHasTypeDefOrRef df) {
 					i.Operand = df.Reference;
 				}
@@ -33,16 +33,15 @@ namespace HookGenExtender.Core.ILGeneration {
 
 		/// <summary>
 		/// Returns true if the provided instruction is any of the <c>br*</c> instructions, conditional or not. Note that this <strong>excludes</strong> <c>jmp</c>.
-		/// (To distant future Xan: Reminder that C# JMP is not x86 JMP. That's what BR is.)
+		/// (To future Xan: Reminder that C# JMP is not x86 JMP. That's what BR is.)
 		/// </summary>
 		/// <param name="instruction"></param>
 		/// <returns></returns>
 		public static bool IsAnyJump(this Instruction instruction) => instruction.OpCode.OperandType == OperandType.InlineBrTarget || instruction.OpCode.OperandType == OperandType.ShortInlineBrTarget;
 
 		/// <summary>
-		/// Returns whether or not the provided instruction is a <c>nop</c> designed as the destination for a branch instruction.
-		/// <para/>
-		/// This only returns true for members created with <see cref="ILTools.NewBrDest(CilBody)"/>.
+		/// Returns whether or not the provided instruction is a <c>nop</c> explicitly designed as the destination for 
+		/// a branch instruction during the manual IL writing phase (see <see cref="ILTools.NewBrDest(CilBody)"/>).
 		/// </summary>
 		/// <param name="instruction"></param>
 		/// <returns></returns>
@@ -61,20 +60,13 @@ namespace HookGenExtender.Core.ILGeneration {
 			List<int> allDestsInstructionIndices = allDests.Select(instruction => body.Instructions.IndexOf(instruction)).ToList();
 
 			List<Instruction> garbage = new List<Instruction>();
-			//Dictionary<Instruction, List<Instruction>> jumpDestsToOriginal = new Dictionary<Instruction, List<Instruction>>();
 			foreach (Instruction jump in jumps) {
 				// Below: Use a while loop instead of an if statement.
 				// This addresses an edge case where a jump destination immediately follows another.
 				// Without the while loop, it would leave some branches without a destination as the instruction gets deleted.
 				while (jump.Operand is Instruction jumpDest && jumpDest.IsBrDestNop()) {
+					// TODO: Raise an exception if the operand isn't == body?
 					garbage.Add(jumpDest);
-					/*
-					if (!jumpDestsToOriginal.TryGetValue(jumpDest, out List<Instruction> jumpDestinations)) {
-						jumpDestinations = new List<Instruction>();
-						jumpDestsToOriginal[jumpDest] = jumpDestinations;
-					}
-					jumpDestinations.Add(jump);
-					*/
 					if (body.Instructions.TryGetElementAfter(jumpDest, out Instruction nextDest)) {
 						jump.Operand = nextDest;
 					} else {
@@ -105,14 +97,14 @@ namespace HookGenExtender.Core.ILGeneration {
 					throw new InvalidOperationException(error);
 				} else {
 					foreach (Instruction jump in allDests) {
-						jump.Operand = null; // Just clear the operand so that the system doesn't fail to generate code.
+						jump.Operand = null; // Clear the operand so that the system doesn't fail to generate code.
 					}
 				}
 			}
 		}
 
 		/// <summary>
-		/// In the provided order, this calls:
+		/// In order, this calls:
 		/// <list type="number">
 		/// <item><see cref="BakeDefRefsDown(CilBody)"/></item>
 		/// <item><see cref="OptimizeNopJumps(CilBody, bool)"/></item>
@@ -120,8 +112,8 @@ namespace HookGenExtender.Core.ILGeneration {
 		/// <item><see cref="CilBody.OptimizeMacros()"/></item>
 		/// <item><see cref="CilBody.UpdateInstructionOffsets()"/></item>
 		/// </list>
-		/// Then this will verify the stack of the method, raising an exception for any mistakes in a manner that should make debugging much, <em>much</em> easier
-		/// than what DNLib provides by default.
+		/// Then this will verify the stack of the method, raising an exception for any mistakes. Exceptions will report
+		/// the instruction where the issue was detected, as well as how many stack values are missing or left behind.
 		/// </summary>
 		/// <param name="body"></param>
 		public static void FinalizeMethodBody(this MethodDef method, ExtensiblesGenerator main) {
@@ -141,7 +133,7 @@ namespace HookGenExtender.Core.ILGeneration {
 					if (mbrRef.DeclaringType != null) {
 						if (mbrRef.DeclaringType.DefinitionAssembly == main.Extensibles.Assembly && !mbrRef.IsMethodDef && !mbrRef.IsFieldDef && !mbrRef.IsPropertyDef && !mbrRef.IsTypeDef) {
 							if (mbrRef.IsTypeRef && ((MemberRef)mbrRef).Class is ITypeDefOrRef tdor && tdor.NumberOfGenericParameters == 0) {
-								throw new InvalidOperationException($"One of the operands of an instruction is a reference to a declared type. Use the definition instead! Operand: {mbrRef}");
+								throw new InvalidOperationException($"One of the operands of an instruction is a reference to a declared type. Use the definition of the type instead! Operand: {mbrRef}");
 							}
 						}
 					}
