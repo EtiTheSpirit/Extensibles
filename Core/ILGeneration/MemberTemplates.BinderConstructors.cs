@@ -69,6 +69,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			CilBody bindBody = bind.GetOrCreateBody();
 			Local tExtensibleType = new Local(main.Shared.TypeSig, "tExtensibleType");
 			Local inputObjectType = new Local(main.Shared.TypeSig, "gameObjectType");
+			Local extensibleWeakRefInstance = new Local(main.Shared.WeakReferenceGenericArg0.Signature, "tExtensibleRef");
 			Local extensibleInstance = new Local(CommonGenericArgs.TYPE_ARG_0, "tExtensible");
 			Local constructor = new Local(main.Shared.ConstructorInfoSig, "constructor");
 
@@ -116,7 +117,8 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			#region Ensure binding is not a duplicate
 			bindBody.EmitLdarg(0);
-			bindBody.EmitLdloc(extensibleInstance, true);
+			// bindBody.EmitLdloc(extensibleInstance, true); // WRONG
+			bindBody.EmitLdloc(extensibleWeakRefInstance, true);
 			bindBody.EmitCallvirt(binderMembers.tryGetBindingMethod.Reference);
 			Instruction bindingIsNotAlreadyPresent = bindBody.NewBrDest();
 			bindBody.Emit(OpCodes.Brfalse, bindingIsNotAlreadyPresent);
@@ -124,6 +126,12 @@ namespace HookGenExtender.Core.ILGeneration {
 			bindBody.EmitInvalidOpException(main, $"[Extensible] Duplicate binding! Only one instance of your current Extensible type can be bound to an instance of type {{{type.ImportedGameType.FullName}}} at a time.");
 			////
 			bindBody.Emit(bindingIsNotAlreadyPresent);
+			/*
+			bindBody.EmitLdloc(extensibleWeakRefInstance, false);
+			bindBody.EmitLdloc(extensibleInstance, true);
+			bindBody.EmitCallvirt(main.Shared.WeakRefTryGetTargetArg0Reference);
+			bindBody.Emit(OpCodes.Pop); // Remove the true/false success value from the stack, we already know it's invalid at this point.
+			*/
 			#endregion
 
 			#region Final Instance Creation
