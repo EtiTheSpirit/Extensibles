@@ -107,7 +107,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			tryReleaseBindingMethod.SetParameterName(0, "fromInstance");
 			@in.Binder.AddMethod(tryReleaseBindingMethod);
 
-			MethodDefAndRef tryGetBindingMethod = new MethodDefAndRef(main, "TryGetBinding", MethodSig.CreateStatic(main.CorLibTypeSig<bool>(), @in.ImportedGameTypeSig, new ByRefSig(weakRefExtensibleFldType.Signature)), @in.GenericBinder.Reference, MethodAttributes.Public);
+			MethodDefAndRef tryGetBindingMethod = new MethodDefAndRef(main, "TryGetBinding", MethodSig.CreateStatic(main.CorLibTypeSig<bool>(), @in.ImportedGameTypeSig, /*new ByRefSig(weakRefExtensibleFldType.Signature)*/ CommonGenericArgs.BYREF_TYPE_ARG_0), @in.GenericBinder.Reference, MethodAttributes.Public);
 			tryGetBindingMethod.Definition.Parameters[1].GetOrCreateParamDef().IsOut = true;
 			tryGetBindingMethod.SetParameterName(0, "toInstance");
 			tryGetBindingMethod.SetParameterName(1, "binding");

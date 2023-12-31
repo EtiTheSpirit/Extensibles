@@ -35,11 +35,11 @@ namespace HookGenExtender.Core.Utils {
 			xml.AppendLine("<members>");
 			foreach (ExtensibleTypeData info in main.GetAllExtensibleTypes()) {
 				// Replacement type:
-				xml.AppendFormat("<member name=\"T:{0}\">", info.ExtensibleType.Reference.FullName.Replace("/", "."));
+				xml.AppendFormat("<member name=\"T:{0}\">", GetTypeName(info.ExtensibleType));
 				xml.AppendLine("<summary>");
-				xml.AppendFormat("Extend this type to create an object that behaves as if it were an instance of <see cref=\"T:{0}\"/>.\n", info.ImportedGameType.FullName);
+				xml.AppendFormat("Extend this type to create an object that behaves as if it were an instance of <see cref=\"T:{0}\"/>.\n", GetTypeName(info.ImportedGameType));
 				xml.Append("Your type will inherit all methods, properties, and fields of the original type.<para/>\n\n");
-				xml.AppendFormat("<strong>IMPORTANT:</strong> You <em>must</em> hook the original type (<see cref=\"T:{0}\"/>)'s <c>.ctor</c> and use this Extensible type's <see cref=\"T:{1}\">Binder</see>. For more information, check the Binder class stored within this class.<para/>\n\n", info.ImportedGameType.FullName, info.Binder.Reference.FullName);
+				xml.AppendFormat("<strong>IMPORTANT:</strong> You <em>must</em> hook the original type (<see cref=\"T:{0}\"/>)'s <c>.ctor</c> and use this Extensible type's <see cref=\"T:{1}\">Binder</see>. For more information, check the Binder class stored within this class.<para/>\n\n", GetTypeName(info.ImportedGameType), GetTypeName(info.Binder));
 				xml.AppendLine("Fields can <em>not</em> be overridden, as they are proxies. However, certain special rules apply to properties and methods, which <em>can</em> be overridden.");
 				xml.AppendLine("When you override these properties or methods, they behave as an <strong>extensible hook</strong>. ");
 				xml.AppendLine("Extensible hooks serve both as a proxy to the original game code, and are also a BepInEx <c>On.</c> hook, at the same time. ");
@@ -53,10 +53,10 @@ namespace HookGenExtender.Core.Utils {
 				xml.AppendLine("</member>");
 
 				// Binder type:
-				xml.AppendFormat("<member name=\"T:{0}\">", info.Binder.Reference.FullName.Replace("/", "."));
+				xml.AppendFormat("<member name=\"T:{0}\">", GetTypeName(info.Binder));
 				xml.AppendLine("<summary>");
 				xml.AppendLine("Every extensible class comes with a <strong>Binder</strong>. The binder's job is to bridge the gap between the game and BepInEx mod hooks, and your special Extensible type.<br/>");
-				xml.AppendFormat("Use the <c>Bind</c> method to tell the system that your instance of <see cref=\"T:{0}\"/> corresponds to the original instance of <see cref=\"T:{1}\"/> that you provide to it.<para/>\n\n", info.ExtensibleType.Reference.FullName, info.ImportedGameType.FullName);
+				xml.AppendFormat("Use the <c>Bind</c> method to tell the system that your instance of <see cref=\"T:{0}\"/> corresponds to the original instance of <see cref=\"T:{1}\"/> that you provide to it.<para/>\n\n", GetTypeName(info.ExtensibleType), GetTypeName(info.ImportedGameType));
 				xml.AppendLine("<strong>IMPORTANT:</strong> You can only bind one instance of your Extensible type to any given instance of the original type at a time! If you try to bind to an object that already has a binding, an exception will be raised. To clean up bindings, use the <c>TryReleaseCurrentBinding</c> method.");
 				xml.AppendLine("</summary>");
 				xml.AppendLine("</member>");
@@ -65,6 +65,17 @@ namespace HookGenExtender.Core.Utils {
 			xml.Append(XML_END);
 			File.WriteAllText(toFile.FullName, xml.ToString());
 		}
+
+		private static string GetTypeName(CachedTypeDef type) {
+			return type.Reference.FullName.Replace("/", ".");
+		}
+
+
+		private static string GetTypeName(ITypeDefOrRef type) {
+			return type.FullName.Replace("/", ".");
+		}
+
+
 
 	}
 }

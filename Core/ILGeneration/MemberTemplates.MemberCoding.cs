@@ -260,9 +260,16 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			#region TryGetBinding
 			CilBody tryGetBindingBody = tryGetBinding.GetOrCreateBody();
-			Local strongRef = new Local(CommonGenericArgs.TYPE_ARG_0, "result");
-			tryGetBindingBody.Variables.Add(strongRef);
+			// Local strongRef = new Local(CommonGenericArgs.TYPE_ARG_0, "result");
+			// tryGetBindingBody.Variables.Add(strongRef);
 
+			tryGetBindingBody.Emit(OpCodes.Ldsfld, bindings.Reference);
+			tryGetBindingBody.EmitLdarg(0);
+			tryGetBindingBody.EmitLdarg(1);
+			tryGetBindingBody.EmitCallvirt(bindingsFieldType.ReferenceExistingMethod("TryGetValue", main.Shared.CWTTryGetValueSig));
+			tryGetBindingBody.EmitRet();
+
+			/*
 			tryGetBindingBody.Emit(OpCodes.Ldsfld, bindings.Reference);
 			tryGetBindingBody.EmitLdarg(0);
 			// tryGetBindingBody.EmitLdarg(1, false); // Reminder: It's already a by-ref type. Don't ref the ref.
@@ -284,6 +291,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			tryGetBindingBody.Emit(OpCodes.Stind_Ref);
 			tryGetBindingBody.EmitValue(true);
 			tryGetBindingBody.EmitRet();
+			*/
 
 			tryGetBinding.FinalizeMethodBody(main);
 			#endregion

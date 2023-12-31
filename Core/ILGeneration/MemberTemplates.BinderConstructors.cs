@@ -69,7 +69,7 @@ namespace HookGenExtender.Core.ILGeneration {
 			CilBody bindBody = bind.GetOrCreateBody();
 			Local tExtensibleType = new Local(main.Shared.TypeSig, "tExtensibleType");
 			Local inputObjectType = new Local(main.Shared.TypeSig, "gameObjectType");
-			Local extensibleWeakRefInstance = new Local(main.Shared.WeakReferenceGenericArg0.Signature, "tExtensibleRef");
+			//Local extensibleWeakRefInstance = new Local(main.Shared.WeakReferenceGenericArg0.Signature, "tExtensibleRef");
 			Local extensibleInstance = new Local(CommonGenericArgs.TYPE_ARG_0, "tExtensible");
 			Local constructor = new Local(main.Shared.ConstructorInfoSig, "constructor");
 
@@ -117,8 +117,8 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			#region Ensure binding is not a duplicate
 			bindBody.EmitLdarg(0);
-			// bindBody.EmitLdloc(extensibleInstance, true); // WRONG
-			bindBody.EmitLdloc(extensibleWeakRefInstance, true);
+			bindBody.EmitLdloc(extensibleInstance, true);
+			// bindBody.EmitLdloc(extensibleWeakRefInstance, true);
 			bindBody.EmitCallvirt(binderMembers.tryGetBindingMethod.Reference);
 			Instruction bindingIsNotAlreadyPresent = bindBody.NewBrDest();
 			bindBody.Emit(OpCodes.Brfalse, bindingIsNotAlreadyPresent);

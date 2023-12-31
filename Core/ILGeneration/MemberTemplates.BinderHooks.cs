@@ -87,14 +87,15 @@ namespace HookGenExtender.Core.ILGeneration {
 		private static void CommonGenerateBodyOfHookMethod(ExtensiblesGenerator main, MethodDefAndRef boundMethod, in ExtensibleCoreMembers coreMembers, in ExtensibleBinderCoreMembers binderMembers, in ExtensibleMethodProxyMembers extensibleMethodProxyMembers, in BepInExHookRef hook) {
 			CilBody body = boundMethod.GetOrCreateBody();
 			Local extensibleInstance = new Local(CommonGenericArgs.TYPE_ARG_0, "extensibleInstance");
-			Local extensibleWeakInstance = new Local(main.Shared.WeakReferenceGenericArg0.Signature, "extensibleWeakInstance");
+			// Local extensibleWeakInstance = new Local(main.Shared.WeakReferenceGenericArg0.Signature, "extensibleWeakInstance");
 			body.SetLocals(extensibleInstance);
 
 			int numArgsForOrigSelfCall = boundMethod.Definition.MethodSig.GetParamCount();
 			int numArgsForProxyCall = numArgsForOrigSelfCall - 2;
 
-			body.EmitLdarg(1);												// self
-			body.EmitLdloc(extensibleWeakInstance, true);             // extensibleInstance (var)
+			body.EmitLdarg(1);                                             // self
+			//body.EmitLdloc(extensibleWeakInstance, true);						// extensibleInstance (var)
+			body.EmitLdloc(extensibleInstance, true);					// extensibleInstance (var)
 			body.EmitCallvirt(binderMembers.tryGetBindingMethod.Reference);     // => TryGetBinding(self, out extensibleInstance)
 			Instruction callOrig = body.NewBrDest();
 			Instruction ret = new Instruction(OpCodes.Ret);
@@ -102,10 +103,10 @@ namespace HookGenExtender.Core.ILGeneration {
 
 			// From here, there is a binding. Act on it.
 			// It's safe to assume that it is present in this scenario as if it got GCed, the WeakRef would be empty
-			body.EmitLdloc(extensibleWeakInstance);
-			body.EmitLdloc(extensibleInstance, true);
-			body.EmitCallvirt(main.Shared.WeakRefTryGetTargetArg0Reference);
-			body.Emit(OpCodes.Pop); // Remove the bool from the stack.
+			//body.EmitLdloc(extensibleWeakInstance);
+			//body.EmitLdloc(extensibleInstance, true);
+			//body.EmitCallvirt(main.Shared.WeakRefTryGetTargetArg0Reference);
+			//body.Emit(OpCodes.Pop); // Remove the bool from the stack.
 
 			// Now, tell the extensible type that a BIE hook is executing:
 			body.EmitLdloc(extensibleInstance);
